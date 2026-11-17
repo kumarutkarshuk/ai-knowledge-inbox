@@ -1,0 +1,10 @@
+- monorepo
+- frontend: React
+- backend: Node + Express
+- Groq for LLM inference
+- Supabase (Postgres + pgvector) for database and similarity search
+- TailwindCSS
+- shadcn or similar libraries
+- Jina AI for embedding generation
+- Vercel with analytics
+- Langchain for RAG pipeline
