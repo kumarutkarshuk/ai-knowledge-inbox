@@ -1,0 +1,17 @@
+import { Navigate, type RouteObject } from 'react-router';
+import { AppShell } from '@/components/AppShell';
+import { AskPage } from '@/pages/AskPage';
+import { LibraryPage } from '@/pages/LibraryPage';
+import { LoginPage } from '@/pages/LoginPage';
+
+export const routes: RouteObject[] = [
+  { path: '/login', element: <LoginPage /> },
+  {
+    element: <AppShell />,
+    children: [
+      { path: '/', element: <AskPage /> },
+      { path: '/library', element: <LibraryPage /> },
+    ],
+  },
+  { path: '*', element: <Navigate to="/" replace /> },
+];

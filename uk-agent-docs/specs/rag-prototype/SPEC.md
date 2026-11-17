@@ -1,6 +1,6 @@
 # SPEC: AI Knowledge Inbox (RAG prototype)
 
-Status: planned, not started (2026-11-17)
+Status: in progress, TICKET-1 done (2026-11-17)
 Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
 
 ## 1. Goal
@@ -259,6 +259,10 @@ Pages:
 | web | VITE_API_URL |
 
 Both apps ship a `.env.example`. The api validates env vars at startup (zod) and exits with a clear message if one is missing.
+
+- PORT is optional (default 4000).
+- FRONTEND_ORIGIN and SUPABASE_URL must be http(s) URLs. FRONTEND_ORIGIN is reduced to its origin.
+- TOKEN_SECRET must be at least 32 chars.
 
 ## 13. Edge cases (must handle)
 
