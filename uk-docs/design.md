@@ -14,12 +14,16 @@
 
 # Entities
 
-- knowledge_base (id, raw_content, status)
+- knowledge_base
     - id (UUID)
     - raw_content (VARCHAR(MAX))
     - status ('SUBMITTED', 'PROCESSING', 'FAILED', 'READY')
     - created_at (timestamptz)
     - modified_at (timestamptz)
+    - error_message
+    - deleted_at (timestamptz)
+
+- chunks
 
 # API Design
 
@@ -30,6 +34,7 @@
 - POST /query
     - get answer to a query
     - uses SSE + token streaming
+- GET /health
 
 # HLD
 
@@ -38,9 +43,10 @@
 # Notes
 
 - Frontend inspiration: Perplexity AI 
-- There is only a single user of the app
+- There is only a single user of the app with creds in env
 - Assumptions
     - deep links in a URL can be ignored
     - URLs are of only text-based web pages
-
+    - no chat history fed back to LLM
+    - chat history is not stored
 

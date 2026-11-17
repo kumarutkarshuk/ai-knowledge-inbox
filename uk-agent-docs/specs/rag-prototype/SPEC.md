@@ -1,0 +1,298 @@
+# SPEC: AI Knowledge Inbox (RAG prototype)
+
+Status: planned, not started (2026-11-17)
+Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
+
+## 1. Goal
+
+A single-user web app where the user saves notes and URLs, then asks questions answered only from the saved content, with chunk-level citations. UI inspiration: Perplexity AI.
+
+## 2. Functional requirements
+
+- Save a note (text + optional title).
+- Save a URL (text-based web page only).
+- View saved items with their processing status and error message.
+- Soft delete an item (only when status is READY or FAILED).
+- Ask a single-turn question; get a streamed answer with chunk-level citations.
+- Login with a single password.
+
+## 3. Out of scope
+
+- Chat history (not stored, not sent to LLM). Every question is independent.
+- Multi-user, signup, roles.
+- Following deep links inside a URL page.
+- Non-text URLs (PDF, video, images).
+- Trash view / restore button. Restore happens only by re-uploading.
+- Editing items.
+
+## 4. Tech stack
+
+| Area | Choice |
+|---|---|
+| Repo | Monorepo, bun workspaces (bun = package manager only) |
+| Language | TypeScript everywhere |
+| Frontend | React + Vite, TailwindCSS, shadcn/ui, react-router, react-markdown, @vercel/analytics |
+| Backend | Node + Express (runtime is Node, not bun) |
+| Scheduler | node-cron inside the backend process |
+| DB | Supabase Postgres + pgvector |
+| RAG lib | Langchain (RecursiveCharacterTextSplitter, Jina embeddings, ChatGroq) |
+| LLM | Groq `llama-3.3-70b-versatile` |
+| Embeddings | Jina `jina-embeddings-v3`, 1024 dims (`retrieval.passage` for chunks, `retrieval.query` for queries) |
+| URL extraction | Jina Reader API (`https://r.jina.ai/<url>`, JSON response) |
+| Auth token | JWT HS256 (jsonwebtoken), 7 day expiry |
+| Tests | vitest for pure logic |
+| Hosting | Frontend: Vercel (with analytics). Backend: Render. Keep-alive: external pinger (cron-job.org) hits GET /health every 10 min |
+| CI | GitHub Actions: install, typecheck, lint, test, build |
+
+## 5. Repo layout
+
+```
+/
+├── package.json            # bun workspaces: apps/*, packages/*
+├── bun.lock
+├── apps/
+│   ├── web/                # Vite React app (deployed to Vercel)
+│   └── api/                # Express app + worker (deployed to Render)
+├── packages/
+│   └── shared/             # API request/response types, constants
+├── supabase/
+│   └── migrations/         # SQL migrations
+├── render.yaml
+└── .github/workflows/ci.yml
+```
+
+## 6. Constants (packages/shared)
+
+| Name | Value |
+|---|---|
+| NOTE_MAX_CHARS | 50_000 |
+| URL_CONTENT_MAX_CHARS | 200_000 (extra content is cut off, not an error) |
+| NOTE_TITLE_FALLBACK_CHARS | 60 |
+| QUERY_MAX_CHARS | 1_000 |
+| CHUNK_SIZE / CHUNK_OVERLAP | 1000 / 200 chars |
+| TOP_K | 5 |
+| MIN_SIMILARITY | 0.5 (cosine similarity) |
+| CRON_SCHEDULE | every 1 minute |
+| JOBS_PER_RUN | 3 |
+| MAX_RETRIES | 3 (so max 4 attempts in total) |
+| STUCK_AFTER_MINUTES | 10 |
+| TOKEN_TTL | 7 days |
+| ITEMS_POLL_MS | 5000 (frontend, only while some item is SUBMITTED or PROCESSING) |
+| NOT_FOUND_ANSWER | "Not found in your saved items." |
+
+## 7. Data model
+
+### knowledge_base
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | default gen_random_uuid() |
+| type | text | 'NOTE' or 'URL' |
+| source_url | text null | normalized URL; set only for URL |
+| title | text null | note: user title or first 60 chars; URL: page title from Jina Reader |
+| raw_content | text null | note: trimmed text at submit; URL: extracted text after processing |
+| content_hash | text null | sha256 of trimmed note text; set only for NOTE |
+| status | text | 'SUBMITTED', 'PROCESSING', 'FAILED', 'READY' |
+| error_message | text null | last error, shown in UI |
+| retry_count | int | default 0 |
+| deleted_at | timestamptz null | soft delete marker |
+| created_at | timestamptz | default now() |
+| modified_at | timestamptz | default now(), updated by trigger on every update |
+
+Constraints / indexes:
+- unique index on source_url (all rows, including deleted ones)
+- unique index on content_hash (all rows, including deleted ones)
+- check: type = 'URL' -> source_url not null; type = 'NOTE' -> content_hash not null
+- index on (status, created_at)
+
+### chunks
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| item_id | uuid FK -> knowledge_base.id | on delete cascade |
+| chunk_index | int | order within item |
+| content | text | |
+| embedding | vector(1024) | |
+| created_at | timestamptz | |
+
+- HNSW index on embedding with vector_cosine_ops.
+- Chunks are kept when an item is soft deleted (so restore is instant).
+
+### SQL functions (called with supabase.rpc)
+
+- `claim_jobs(batch int)`: atomically picks up to `batch` rows where status = 'SUBMITTED' and deleted_at is null, ordered by created_at, using `FOR UPDATE SKIP LOCKED`; sets status = 'PROCESSING'; returns the rows.
+- `reset_stuck_jobs(stuck_minutes int, max_retries int)`: rows with status 'PROCESSING' and modified_at older than `stuck_minutes` -> retry_count + 1; status 'SUBMITTED' if retry_count <= max_retries, else 'FAILED' with error_message 'Processing timed out'.
+- `match_chunks(query_embedding vector(1024), match_count int, min_similarity float)`: returns chunk id, item_id, content, similarity (1 - cosine distance) plus item type, title, source_url; only items with status 'READY' and deleted_at null; similarity >= min_similarity; ordered by similarity desc; limit match_count.
+
+Backend uses the Supabase service role key. RLS enabled on both tables with no policies (only service role can access).
+
+## 8. API
+
+Base: backend on Render. All JSON. All routes except GET /health and POST /login need header `Authorization: Bearer <token>`. CORS allows only FRONTEND_ORIGIN.
+
+Error shape: `{ "error": { "code": string, "message": string } }`
+
+### GET /health
+- 200 `{ "status": "ok" }`. No DB call (must be fast and cheap for the pinger).
+
+### POST /login
+- Body: `{ "password": string }`
+- Timing-safe compare with APP_PASSWORD.
+- 200 `{ "token": string, "expiresAt": string }`; 401 on wrong password.
+- Rate limit: 5 requests per minute per IP.
+
+### POST /ingest
+- Body: `{ "type": "NOTE", "content": string, "title"?: string }` or `{ "type": "URL", "url": string }`
+- Validation (400):
+  - NOTE: trimmed content not empty, <= 50,000 chars; title (trimmed) <= 200 chars.
+  - URL: must parse, protocol http or https.
+- URL normalization: lowercase scheme and host, remove fragment (#...), remove trailing slash from path (except root "/"), keep query string.
+  - Example: `HTTPS://Example.com/Blog/Post/#intro` -> `https://example.com/Blog/Post`
+- Dedupe + restore logic (match by source_url for URL, content_hash for NOTE):
+  - no match -> insert row with status SUBMITTED -> 201 with item.
+  - match, deleted_at null -> 409 code `ALREADY_EXISTS`.
+  - match, deleted_at not null -> set deleted_at null:
+    - if status FAILED -> status SUBMITTED, retry_count 0, error_message null.
+    - if status READY -> unchanged (no re-fetch, no re-embedding).
+    - -> 200 with item.
+  - restore keeps the old title (a new title in the request is ignored).
+- Response returns quickly; processing happens in the worker.
+
+### GET /items
+- Returns non-deleted items, newest first.
+- 200 `{ "items": Item[] }`
+- Item: `{ id, type, title, sourceUrl, preview, status, errorMessage, createdAt }`
+  - title fallback: URL not yet processed -> sourceUrl.
+  - preview: NOTE -> first 200 chars of raw_content; URL -> null.
+
+### DELETE /items/:id
+- 404 if not found or already deleted.
+- 409 code `ITEM_BUSY` if status is SUBMITTED or PROCESSING.
+- Else set deleted_at = now() -> 204.
+
+### POST /query (SSE)
+- Body: `{ "query": string }`, trimmed, 1..1000 chars (400 otherwise, sent as normal JSON before the stream starts).
+- Response: `Content-Type: text/event-stream`. Frontend reads it with fetch + ReadableStream (EventSource cannot POST).
+- Steps:
+  1. Embed query (Jina, task `retrieval.query`).
+  2. `match_chunks(embedding, 5, 0.5)`.
+  3. If no rows: send `citations` with `[]`, then one `token` with NOT_FOUND_ANSWER, then `done`. Do not call the LLM.
+  4. Else send `citations` first, then stream LLM tokens as `token` events, then `done`.
+- Events:
+  - `event: citations` data `Citation[]`
+  - `event: token` data `{ "text": string }`
+  - `event: done` data `{}`
+  - `event: error` data `{ "message": string }` (then the stream closes)
+- Citation: `{ n, itemId, type, title, sourceUrl, snippet, similarity }`
+  - n is 1-based, matches the [n] markers in the answer.
+  - snippet: chunk content, max 300 chars.
+  - Each chunk is its own citation, even if two chunks come from the same item.
+- Client disconnect -> stop the LLM stream (AbortController).
+- Prompt rules for the LLM:
+  - answer only from the given numbered context chunks.
+  - cite with [n] markers after the claims they support.
+  - if the context does not answer the question, reply exactly NOT_FOUND_ANSWER.
+  - answer in markdown, keep it short.
+
+## 9. Ingestion worker
+
+Runs inside the api process with node-cron, every 1 minute. Has an in-memory `isRunning` flag so runs never overlap.
+
+Each run:
+1. `reset_stuck_jobs(10, 3)`.
+2. `claim_jobs(3)`.
+3. Process the claimed jobs one at a time:
+   - URL:
+     1. GET `https://r.jina.ai/<source_url>` with `Accept: application/json` and the Jina key; timeout 30s.
+     2. Take `data.title` and `data.content`.
+     3. Empty or whitespace-only content -> error "No text content found".
+     4. Cut content off at 200,000 chars.
+     5. Save raw_content and title.
+   - NOTE: use raw_content as it is.
+   - Delete any old chunks of this item (makes retries safe).
+   - Split with RecursiveCharacterTextSplitter (1000 / 200).
+   - Embed chunks with Jina (task `retrieval.passage`), in batches of up to 100.
+   - Insert chunks.
+   - Set status READY, error_message null.
+4. On error for a job: retry_count + 1; error_message = short error text; status SUBMITTED if retry_count <= 3, else FAILED.
+5. One failing job must not stop the other jobs in the same run.
+
+## 10. Auth
+
+- Backend env: APP_PASSWORD, TOKEN_SECRET.
+- Token: JWT HS256 with payload `{ sub: "owner" }` and expiry of 7 days.
+- Middleware checks the Bearer token. Missing, invalid or expired -> 401 `UNAUTHORIZED`.
+- Frontend:
+  - stores the token in localStorage.
+  - every request adds the Authorization header.
+  - on any 401 it clears the token and redirects to /login.
+  - routes other than /login are guarded.
+
+## 11. Frontend
+
+Pages:
+- `/login`: password field + submit; shows an error on 401 or 429.
+- `/` (Ask), Perplexity-like:
+  - a big centered question box; it moves to the bottom after the first question.
+  - the answer streams in, rendered as markdown.
+  - [n] markers become clickable chips that scroll to and highlight the citation card.
+  - citation cards (shown above the answer, before tokens arrive) show title, URL link (for URL items), snippet and similarity.
+  - shows the not-found answer as a muted message.
+  - only one question is in flight; asking again replaces the old answer.
+  - shows the stream error message.
+- `/library`:
+  - add form with tabs Note / URL. Note has an optional title and content with a live char count (max 50,000). URL has one input.
+  - shows 409 "Already saved" and 400 validation messages.
+  - items list: type icon, title, URL link or note preview, status badge, error message (FAILED), created time.
+  - delete button only for READY and FAILED items, with a confirm dialog.
+  - polls GET /items every 5s while any item is SUBMITTED or PROCESSING; stops otherwise.
+- Nav: top bar with Ask, Library and Logout.
+- Vercel Analytics component added at the root.
+- Env: VITE_API_URL.
+
+## 12. Environment variables
+
+| App | Var |
+|---|---|
+| api | PORT, FRONTEND_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY, JINA_API_KEY, APP_PASSWORD, TOKEN_SECRET |
+| web | VITE_API_URL |
+
+Both apps ship a `.env.example`. The api validates env vars at startup (zod) and exits with a clear message if one is missing.
+
+## 13. Edge cases (must handle)
+
+- Same URL with a different fragment or trailing slash -> same item (409).
+- Same note text with extra outer whitespace -> same item (409).
+- Re-upload of a deleted READY item -> restored instantly, no re-processing.
+- Re-upload of a deleted FAILED item -> restored and re-queued with retry_count 0.
+- Delete during SUBMITTED or PROCESSING -> 409 ITEM_BUSY.
+- Jina Reader returns empty content, times out, or non-2xx -> retried, then FAILED with error_message.
+- Server restart while processing -> the stuck reset brings the job back after 10 min.
+- Two overlapping cron runs -> prevented by the isRunning flag and SKIP LOCKED.
+- Very large page -> cut off at 200k chars, still READY.
+- No chunk >= 0.5 similarity -> NOT_FOUND_ANSWER, no LLM call.
+- Deleted items never show up in GET /items or in query results.
+- Client closes the tab during streaming -> LLM call aborted.
+- Expired token -> 401 -> frontend goes to /login.
+- Render cold start (if the pinger misses) -> the frontend shows a loading state; requests may take ~1 min.
+
+## 14. Manual setup by the user
+
+- Create a Supabase project, enable pgvector, run the migrations, and copy the URL and service role key.
+- Get Groq and Jina API keys.
+- Create a Render web service from render.yaml and set the env vars.
+- Create a Vercel project (root apps/web), set VITE_API_URL, enable Analytics.
+- Create a cron-job.org job: GET `<render-url>/health` every 10 min.
+
+## 15. Tickets
+
+| Ticket | Title | Blocked by | Blocks |
+|---|---|---|---|
+| [TICKET-1](tickets/TICKET-1.md) | Monorepo scaffolding + health API | - | 2, 3, 4, 5, 6, 7 |
+| [TICKET-2](tickets/TICKET-2.md) | DB schema, infra config, CI | 1 | 4, 5, 6, 7 |
+| [TICKET-3](tickets/TICKET-3.md) | Auth (login + guard) | 1 | 4, 6, 7 |
+| [TICKET-4](tickets/TICKET-4.md) | Library: ingest, list, soft delete | 1, 2, 3 | 5, 7 |
+| [TICKET-5](tickets/TICKET-5.md) | Ingestion worker | 1, 2, 4 | 6, 7 |
+| [TICKET-6](tickets/TICKET-6.md) | Ask: query with SSE + citations | 1, 2, 3, 5 | 7 |
+| [TICKET-7](tickets/TICKET-7.md) | Deployment + end-to-end check | 1-6 | - |

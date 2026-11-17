@@ -1,4 +1,5 @@
 - monorepo
+- TypeScript
 - frontend: React
 - backend: Node + Express
 - Groq for LLM inference
@@ -6,5 +7,7 @@
 - TailwindCSS
 - shadcn or similar libraries
 - Jina AI for embedding generation
-- Vercel with analytics
+- Vercel with analytics for frontend
+- render.io for backend
 - Langchain for RAG pipeline
+- bun
