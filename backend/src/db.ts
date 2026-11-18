@@ -14,6 +14,31 @@ export function createPool(databaseUrl: string, ssl = true): pg.Pool {
   return pool;
 }
 
+export async function withTransaction<T>(
+  pool: pg.Pool,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  const onError = (err: Error) => console.error(`Database client error: ${err.message}`);
+  client.on("error", onError);
+  let broken: Error | undefined;
+  try {
+    await client.query("begin");
+    const result = await work(client);
+    await client.query("commit");
+    return result;
+  } catch (err) {
+    broken = await client.query("rollback").then(
+      () => undefined,
+      (rollbackErr: Error) => rollbackErr,
+    );
+    throw err;
+  } finally {
+    client.off("error", onError);
+    client.release(broken);
+  }
+}
+
 export interface KnowledgeBaseRow {
   id: string;
   type: ItemType;

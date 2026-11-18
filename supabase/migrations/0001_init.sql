@@ -52,75 +52,10 @@ create index chunks_embedding_idx on chunks using hnsw (embedding vector_cosine_
 alter table knowledge_base enable row level security;
 alter table chunks enable row level security;
 
-create function claim_jobs(batch int) returns setof knowledge_base
-language sql
-set search_path = public, extensions
-as $$
-  with picked as (
-    select id from knowledge_base
-    where status = 'SUBMITTED' and deleted_at is null
-    order by created_at
-    limit batch
-    for update skip locked
-  )
-  update knowledge_base kb
-  set status = 'PROCESSING'
-  from picked
-  where kb.id = picked.id
-  returning kb.*;
-$$;
-
-create function reset_stuck_jobs(stuck_minutes int, max_retries int) returns setof knowledge_base
-language sql
-set search_path = public, extensions
-as $$
-  update knowledge_base
-  set retry_count = retry_count + 1,
-      status = case when retry_count + 1 <= max_retries then 'SUBMITTED' else 'FAILED' end,
-      error_message = case
-        when retry_count + 1 <= max_retries then error_message
-        else 'Processing timed out'
-      end
-  where status = 'PROCESSING'
-    and modified_at < now() - make_interval(mins => stuck_minutes)
-  returning *;
-$$;
-
-create function match_chunks(query_embedding vector(1024), match_count int, min_similarity float)
-returns table (
-  id uuid,
-  item_id uuid,
-  content text,
-  similarity float,
-  type text,
-  title text,
-  source_url text
-)
-language sql stable
-set search_path = public, extensions
-set hnsw.iterative_scan = strict_order
-as $$
-  select c.id, c.item_id, c.content, 1 - (c.embedding <=> query_embedding),
-         kb.type, kb.title, kb.source_url
-  from chunks c
-  join knowledge_base kb on kb.id = c.item_id
-  where kb.status = 'READY'
-    and kb.deleted_at is null
-    and 1 - (c.embedding <=> query_embedding) >= min_similarity
-  order by c.embedding <=> query_embedding
-  limit match_count;
-$$;
-
-revoke all on function claim_jobs(int) from public;
-revoke all on function reset_stuck_jobs(int, int) from public;
-revoke all on function match_chunks(vector, int, float) from public;
-
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
     revoke all on knowledge_base, chunks from anon, authenticated;
-    revoke all on function claim_jobs(int), reset_stuck_jobs(int, int),
-      match_chunks(vector, int, float) from anon, authenticated;
   end if;
 end;
 $$;

@@ -131,16 +131,19 @@ Constraints / indexes:
 - HNSW index on embedding with vector_cosine_ops.
 - Chunks are kept when an item is soft deleted (so restore is instant).
 
-### SQL functions (called with plain SQL via `pg`, e.g. `select * from claim_jobs($1)`)
+### Job and search queries (backend, `backend/src/queries.ts`)
 
-- `claim_jobs(batch int)`: atomically picks up to `batch` rows where status = 'SUBMITTED' and deleted_at is null, ordered by created_at, using `FOR UPDATE SKIP LOCKED`; sets status = 'PROCESSING'; returns the rows.
-- `reset_stuck_jobs(stuck_minutes int, max_retries int)`: rows with status 'PROCESSING' and modified_at older than `stuck_minutes` -> retry_count + 1; status 'SUBMITTED' if retry_count <= max_retries, else 'FAILED' with error_message 'Processing timed out'.
-- `match_chunks(query_embedding vector(1024), match_count int, min_similarity float)`: returns chunk id, item_id, content, similarity (1 - cosine distance) plus item type, title, source_url; only items with status 'READY' and deleted_at null; similarity >= min_similarity; ordered by similarity desc; limit match_count.
+Plain SQL sent with `pg`. No job or search functions live in the database (see DECISIONS-1 D15); the only DB function is the `modified_at` trigger.
 
-Function notes:
-- All functions have `search_path = public, extensions` (works when pgvector lives in Supabase's `extensions` schema).
-- `match_chunks` sets `hnsw.iterative_scan = strict_order` (pgvector >= 0.8) so filtered-out chunks do not leave it with fewer than `match_count` rows.
-- EXECUTE on the three functions is revoked from PUBLIC, and from `anon` and `authenticated` (plus all table privileges) when those Supabase roles exist.
+- `claimJobs(db, batch)`: one statement that atomically picks up to `batch` rows where status = 'SUBMITTED' and deleted_at is null, ordered by created_at, using `FOR UPDATE SKIP LOCKED`; sets status = 'PROCESSING'; returns the rows oldest first.
+- `resetStuckJobs(db, stuckMinutes, maxRetries)`: rows with status 'PROCESSING' and modified_at older than `stuckMinutes` (DB clock) -> retry_count + 1; status 'SUBMITTED' if retry_count <= maxRetries, else 'FAILED' with error_message 'Processing timed out'.
+- `matchChunks(pool, embedding, matchCount, minSimilarity)`: returns chunk id, item_id, content, similarity (1 - cosine distance) plus item type, title, source_url; only items with status 'READY' and deleted_at null; similarity >= minSimilarity; ordered by similarity desc; limit matchCount.
+  - runs in a short transaction (`withTransaction` in `db.ts`) with `set local hnsw.iterative_scan = strict_order` (pgvector >= 0.8), so filtered-out chunks do not leave it with fewer than `matchCount` rows, and `set local statement_timeout` = DB_QUERY_TIMEOUT_MS (15s).
+  - throws before querying if the embedding is not EMBEDDING_DIMS (1024) finite numbers.
+- Counts (`batch`, `matchCount`, `stuckMinutes`, `maxRetries`) must be non-negative integers, else the function throws before querying.
+- `db` is a pool or a checked-out client, so callers can run claimJobs inside their own transaction.
+
+Privileges: when the Supabase roles `anon` and `authenticated` exist, the migration revokes all table privileges from them.
 
 Backend connects as the `postgres` role through DATABASE_URL (session pooler, port 5432). This role owns the tables, so RLS does not apply to it. RLS enabled on both tables with no policies, so the public Supabase REST API (anon/authenticated keys) cannot read or write them.
 
@@ -193,7 +196,7 @@ Error shape: `{ "error": { "code": string, "message": string } }`
 - Response: `Content-Type: text/event-stream`. Frontend reads it with fetch + ReadableStream (EventSource cannot POST).
 - Steps:
   1. Embed query (Jina, task `retrieval.query`).
-  2. `match_chunks(embedding, 5, 0.5)`.
+  2. `matchChunks(pool, embedding, 5, 0.5)`.
   3. If no rows: send `citations` with `[]`, then one `token` with NOT_FOUND_ANSWER, then `done`. Do not call the LLM.
   4. Else send `citations` first, then stream LLM tokens as `token` events, then `done`.
 - Events:
@@ -217,8 +220,8 @@ Error shape: `{ "error": { "code": string, "message": string } }`
 Runs inside the backend process with node-cron, every 1 minute. Has an in-memory `isRunning` flag so runs never overlap.
 
 Each run:
-1. `reset_stuck_jobs(10, 3)`.
-2. `claim_jobs(3)`.
+1. `resetStuckJobs(pool, 10, 3)`.
+2. `claimJobs(pool, 3)`.
 3. Process the claimed jobs one at a time:
    - URL:
      1. GET `https://r.jina.ai/<source_url>` with `Accept: application/json` and the Jina key; timeout 30s.

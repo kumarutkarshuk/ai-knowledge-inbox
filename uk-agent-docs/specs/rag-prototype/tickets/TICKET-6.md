@@ -11,7 +11,7 @@ Backend:
 - `POST /query`:
   - validate the query (trimmed, 1..1000 chars) -> 400 JSON before the stream starts.
   - set SSE headers (`text/event-stream`, `no-cache`, `X-Accel-Buffering: no`) and flush them.
-  - `embedQuery` -> `match_chunks(emb, 5, 0.5)`.
+  - `embedQuery` -> `matchChunks(pool, emb, 5, 0.5)` (from `src/queries.ts`).
   - no rows: `citations []` -> `token` NOT_FOUND_ANSWER -> `done`, with no LLM call.
   - else: `citations` (n, itemId, type, title, sourceUrl, 300-char snippet, similarity) -> stream ChatGroq (`llama-3.3-70b-versatile`, temperature 0.2) tokens as `token` events -> `done`.
   - prompt template with numbered context chunks and the SPEC 8 rules.

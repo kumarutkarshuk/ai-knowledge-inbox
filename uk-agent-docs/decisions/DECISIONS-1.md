@@ -67,8 +67,15 @@ Major, hard-to-reverse decisions. Newest last.
 ## D14: DB access with pg + session pooler, no service role key (2026-11-18)
 - Decision:
   - the backend connects to Supabase Postgres with `pg` (node-postgres) using the session pooler connection string in DATABASE_URL (port 5432).
-  - SQL functions are called with plain SQL, not supabase.rpc.
+  - queries are plain SQL, not supabase.rpc (see D15 for where they live).
   - SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are removed.
 - Why: one env var, plain SQL. The session pooler works over IPv4 (Render) and supports prepared statements and `FOR UPDATE SKIP LOCKED`. The `postgres` role owns the tables, so RLS with no policies still blocks only the public REST API.
 - Trade-off: no supabase-js helpers. Using Supabase Storage or Auth later would need the key again.
 - Rejected: supabase-js with the service role key; the direct connection (IPv6 only); the transaction pooler (port 6543, no prepared statements).
+
+## D15: Job and search queries live in the backend, not as SQL functions (2026-11-18)
+- Decision: claimJobs, resetStuckJobs and matchChunks are plain SQL strings in `backend/src/queries.ts`. The migration has no `claim_jobs` / `reset_stuck_jobs` / `match_chunks` functions.
+- Why: the user wants the logic on the server side, so it changes with a code deploy instead of a migration.
+- Kept: claimJobs is still one statement with `FOR UPDATE SKIP LOCKED` (atomic, no app transaction). matchChunks runs in a short transaction to `set local hnsw.iterative_scan`.
+- Trade-off: matchChunks takes 4 round trips (begin, set, select, commit) instead of 1.
+- Rejected: SQL functions called with `select * from fn(...)` (the earlier TICKET-2 version).
