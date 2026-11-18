@@ -6,8 +6,7 @@ const required = z.string().trim().min(1);
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(0).max(65535).default(DEFAULT_PORT),
   FRONTEND_ORIGIN: z.url().transform((value) => new URL(value).origin),
-  SUPABASE_URL: z.url(),
-  SUPABASE_SERVICE_ROLE_KEY: required,
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/, error: "must be a postgres:// URL" }),
   GROQ_API_KEY: required,
   JINA_API_KEY: required,
   APP_PASSWORD: required,

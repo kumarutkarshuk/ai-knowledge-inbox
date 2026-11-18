@@ -45,6 +45,24 @@ describe("parseEnv", () => {
     expect(messageFor({ ...validEnv, FRONTEND_ORIGIN: "not a url" })).toContain("FRONTEND_ORIGIN");
   });
 
+  it("accepts postgres and postgresql DATABASE_URL schemes", () => {
+    expect(
+      parseEnv({ ...validEnv, DATABASE_URL: "postgres://u:p@localhost:5432/db" }).DATABASE_URL,
+    ).toBe("postgres://u:p@localhost:5432/db");
+    expect(parseEnv(validEnv).DATABASE_URL).toBe(validEnv.DATABASE_URL);
+  });
+
+  it("rejects a non-postgres DATABASE_URL without printing its value", () => {
+    const message = messageFor({ ...validEnv, DATABASE_URL: "https://secret-host.supabase.co" });
+    expect(message).toContain("- DATABASE_URL: must be a postgres:// URL");
+    expect(message).not.toContain("secret-host");
+  });
+
+  it("no longer needs the Supabase REST vars", () => {
+    expect(() => parseEnv(validEnv)).not.toThrow();
+    expect(parseEnv(validEnv)).not.toHaveProperty("SUPABASE_SERVICE_ROLE_KEY");
+  });
+
   it("keeps only the origin of FRONTEND_ORIGIN", () => {
     const env = parseEnv({ ...validEnv, FRONTEND_ORIGIN: "https://App.example.com/some/path/" });
     expect(env.FRONTEND_ORIGIN).toBe("https://app.example.com");

@@ -47,6 +47,7 @@ Blocks: TICKET-2, TICKET-3, TICKET-4, TICKET-5, TICKET-6, TICKET-7
 - Backend entry is `src/index.ts` (built to `dist/index.js`); `createApp` in `src/app.ts` builds the Express app.
 - Backend errors: throw `HttpError(status, code, message)` from `src/errors.ts`; the central handler maps it to the SPEC error shape. Unknown errors -> 500 `INTERNAL_ERROR`, bad JSON -> 400 `INVALID_JSON`, body over 1mb -> 413 `PAYLOAD_TOO_LARGE`, other 4xx body-parser errors -> same status with `BAD_REQUEST`, unknown route -> 404 `NOT_FOUND`.
 - Backend env: all SPEC 12 vars are required except PORT (default 3000). `parseEnv` in `src/env.ts`.
+- DATABASE_URL must use the `postgres://` or `postgresql://` scheme (see DECISIONS-1 D14). Its value is never printed in errors.
 - TOKEN_SECRET must be at least 32 chars (TOKEN_SECRET_MIN_CHARS). FRONTEND_ORIGIN is reduced to its origin (no path, no trailing slash) so CORS matches.
 - Backend exits with code 1 on a listen error (e.g. port taken) and closes the server on SIGTERM/SIGINT.
 - Both projects need Node >= 22.

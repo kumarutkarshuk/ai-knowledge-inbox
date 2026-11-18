@@ -1,8 +1,8 @@
 export const validEnv = {
   PORT: "0",
   FRONTEND_ORIGIN: "http://localhost:5173",
-  SUPABASE_URL: "https://example.supabase.co",
-  SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+  DATABASE_URL:
+    "postgresql://postgres.ref:password@aws-0-ap-south-1.pooler.supabase.com:5432/postgres",
   GROQ_API_KEY: "groq-key",
   JINA_API_KEY: "jina-key",
   APP_PASSWORD: "password",

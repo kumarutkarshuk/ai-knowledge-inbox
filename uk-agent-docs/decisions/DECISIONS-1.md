@@ -63,3 +63,12 @@ Major, hard-to-reverse decisions. Newest last.
 
 ## D13: Size limits (2026-11-17)
 - Decision: notes are max 50,000 chars (400 if longer). URL content is cut off at 200,000 chars. Queries are max 1,000 chars.
+
+## D14: DB access with pg + session pooler, no service role key (2026-11-18)
+- Decision:
+  - the backend connects to Supabase Postgres with `pg` (node-postgres) using the session pooler connection string in DATABASE_URL (port 5432).
+  - SQL functions are called with plain SQL, not supabase.rpc.
+  - SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are removed.
+- Why: one env var, plain SQL. The session pooler works over IPv4 (Render) and supports prepared statements and `FOR UPDATE SKIP LOCKED`. The `postgres` role owns the tables, so RLS with no policies still blocks only the public REST API.
+- Trade-off: no supabase-js helpers. Using Supabase Storage or Auth later would need the key again.
+- Rejected: supabase-js with the service role key; the direct connection (IPv6 only); the transaction pooler (port 6543, no prepared statements).
