@@ -36,6 +36,14 @@ export interface UrlIngestRequest {
 
 export type IngestRequest = NoteIngestRequest | UrlIngestRequest;
 
+export interface IngestResponse {
+  item: Item;
+}
+
+export interface ItemsResponse {
+  items: Item[];
+}
+
 export interface LoginRequest {
   password: string;
 }

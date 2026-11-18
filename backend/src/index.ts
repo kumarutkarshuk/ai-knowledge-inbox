@@ -24,7 +24,7 @@ try {
   process.exit(1);
 }
 
-const server = createApp(env).listen(env.PORT, () => {
+const server = createApp(env, pool).listen(env.PORT, () => {
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : env.PORT;
   console.log(`Backend listening on port ${port}`);

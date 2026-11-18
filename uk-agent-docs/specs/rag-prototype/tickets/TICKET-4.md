@@ -2,6 +2,8 @@
 
 Spec: [SPEC.md](../SPEC.md) sections 7, 8 (POST /ingest, GET /items, DELETE /items/:id), 11 (/library), 13
 
+Status: done (2026-11-18)
+
 Blocked by: TICKET-1, TICKET-2, TICKET-3
 Blocks: TICKET-5, TICKET-7
 

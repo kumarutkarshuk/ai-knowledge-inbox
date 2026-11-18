@@ -2,10 +2,11 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { signToken } from "./auth.js";
+import type pg from "pg";
 import { validEnv } from "./test/fixtures.js";
 
 const origin = validEnv.FRONTEND_ORIGIN;
-const app = createApp(validEnv);
+const app = createApp(validEnv, {} as pg.Pool);
 const auth = `Bearer ${signToken(validEnv.TOKEN_SECRET).token}`;
 
 describe("GET /health", () => {

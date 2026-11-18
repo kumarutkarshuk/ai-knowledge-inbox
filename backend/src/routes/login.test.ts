@@ -1,10 +1,11 @@
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
+import type pg from "pg";
 import { validEnv } from "../test/fixtures.js";
 
 function newApp() {
-  return createApp(validEnv);
+  return createApp(validEnv, {} as pg.Pool);
 }
 
 function login(app: ReturnType<typeof newApp>, body: unknown, ip?: string) {
