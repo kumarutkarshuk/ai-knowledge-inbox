@@ -17,3 +17,4 @@ export const NOT_FOUND_ANSWER = "Not found in your saved items.";
 export const JSON_BODY_LIMIT = "1mb";
 export const DEFAULT_PORT = 3000;
 export const TOKEN_SECRET_MIN_CHARS = 32;
+export const DB_CONNECT_TIMEOUT_MS = 10_000;

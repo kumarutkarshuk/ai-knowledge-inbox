@@ -1,6 +1,6 @@
 # SPEC: AI Knowledge Inbox (RAG prototype)
 
-Status: in progress, TICKET-1 done (2026-11-18)
+Status: in progress, TICKET-1 and TICKET-2 done (2026-11-18)
 Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
 
 ## 1. Goal
@@ -136,6 +136,11 @@ Constraints / indexes:
 - `claim_jobs(batch int)`: atomically picks up to `batch` rows where status = 'SUBMITTED' and deleted_at is null, ordered by created_at, using `FOR UPDATE SKIP LOCKED`; sets status = 'PROCESSING'; returns the rows.
 - `reset_stuck_jobs(stuck_minutes int, max_retries int)`: rows with status 'PROCESSING' and modified_at older than `stuck_minutes` -> retry_count + 1; status 'SUBMITTED' if retry_count <= max_retries, else 'FAILED' with error_message 'Processing timed out'.
 - `match_chunks(query_embedding vector(1024), match_count int, min_similarity float)`: returns chunk id, item_id, content, similarity (1 - cosine distance) plus item type, title, source_url; only items with status 'READY' and deleted_at null; similarity >= min_similarity; ordered by similarity desc; limit match_count.
+
+Function notes:
+- All functions have `search_path = public, extensions` (works when pgvector lives in Supabase's `extensions` schema).
+- `match_chunks` sets `hnsw.iterative_scan = strict_order` (pgvector >= 0.8) so filtered-out chunks do not leave it with fewer than `match_count` rows.
+- EXECUTE on the three functions is revoked from PUBLIC, and from `anon` and `authenticated` (plus all table privileges) when those Supabase roles exist.
 
 Backend connects as the `postgres` role through DATABASE_URL (session pooler, port 5432). This role owns the tables, so RLS does not apply to it. RLS enabled on both tables with no policies, so the public Supabase REST API (anon/authenticated keys) cannot read or write them.
 
