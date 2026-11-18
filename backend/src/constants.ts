@@ -1,6 +1,9 @@
 export const NOTE_MAX_CHARS = 50_000;
 export const URL_CONTENT_MAX_CHARS = 200_000;
 export const NOTE_TITLE_FALLBACK_CHARS = 60;
+export const NOTE_TITLE_MAX_CHARS = 200;
+export const NOTE_PREVIEW_CHARS = 200;
+export const URL_MAX_CHARS = 2048;
 export const QUERY_MAX_CHARS = 1_000;
 export const CHUNK_SIZE = 1000;
 export const CHUNK_OVERLAP = 200;

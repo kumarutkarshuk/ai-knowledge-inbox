@@ -1,11 +1,22 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getToken, setToken } from "@/lib/auth";
 import { routes } from "@/routes";
 
 const future = new Date(Date.now() + 60_000).toISOString();
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ items: [] }), { status: 200 })),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });

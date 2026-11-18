@@ -72,7 +72,8 @@ describe.skipIf(!adminUrl)("backend process with a database", () => {
       const authed = await fetch(`${base}/items`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      expect(authed.status).toBe(404);
+      expect(authed.status).toBe(200);
+      expect(await authed.json()).toEqual({ items: [] });
       expect(stdout).toContain("Migrations applied: 0001_init");
       const { rows } = await db.pool.query("select to_regclass('public.knowledge_base') as t");
       expect(rows[0].t).toBe("knowledge_base");

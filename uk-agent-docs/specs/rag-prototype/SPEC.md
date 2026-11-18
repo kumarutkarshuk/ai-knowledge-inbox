@@ -1,6 +1,6 @@
 # SPEC: AI Knowledge Inbox (RAG prototype)
 
-Status: in progress, TICKET-1, TICKET-2 and TICKET-3 done (2026-11-18)
+Status: in progress, TICKET-1 to TICKET-4 done (2026-11-18)
 Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
 
 ## 1. Goal
@@ -79,6 +79,9 @@ All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` cop
 | NOTE_MAX_CHARS | 50_000 |
 | URL_CONTENT_MAX_CHARS | 200_000 (extra content is cut off, not an error) |
 | NOTE_TITLE_FALLBACK_CHARS | 60 |
+| NOTE_TITLE_MAX_CHARS | 200 |
+| NOTE_PREVIEW_CHARS | 200 (GET /items note preview) |
+| URL_MAX_CHARS | 2048 (longer URLs would break the btree limit of the unique source_url index) |
 | QUERY_MAX_CHARS | 1_000 |
 | CHUNK_SIZE / CHUNK_OVERLAP | 1000 / 200 chars |
 | TOP_K | 5 |
@@ -142,6 +145,10 @@ Plain SQL sent with `pg`. No job or search functions live in the database (see D
 - Counts (`batch`, `matchCount`, `stuckMinutes`, `maxRetries`) must be non-negative integers, else the function throws before querying.
 - `db` is a pool or a checked-out client, so callers can run claimJobs inside their own transaction.
 
+### Item queries (backend, `backend/src/itemQueries.ts`)
+
+Plain SQL for the library routes: `findItemByKey`, `insertUrlItem`, `insertNoteItem` (a 23505 unique violation throws `DuplicateItemError`), `restoreItem` (guarded by `deleted_at is not null`), `listItems`, `softDeleteItem` (one statement; returns DELETED, NOT_FOUND or BUSY). Pure ingest logic (`normalizeUrl`, `hashNote`, `noteTitle`, `decideIngest`) lives in `backend/src/ingest.ts`.
+
 Migrations: SQL files in `backend/migrations/`, applied by node-pg-migrate at backend startup, before the server listens (see DECISIONS-1 D16). Applied files are recorded in `migrations.pgmigrations` (not in `public`, so the Supabase REST API does not expose it). If a migration fails, the backend exits with code 1.
 
 Privileges: when the Supabase roles `anon` and `authenticated` exist, the migration revokes all table privileges from them.
@@ -171,16 +178,18 @@ Error shape: `{ "error": { "code": string, "message": string } }`
 - Body: `{ "type": "NOTE", "content": string, "title"?: string }` or `{ "type": "URL", "url": string }`
 - Validation (400):
   - NOTE: trimmed content not empty, <= 50,000 chars; title (trimmed) <= 200 chars.
-  - URL: must parse, protocol http or https.
+  - URL: trimmed, <= 2048 chars, must parse, protocol http or https.
 - URL normalization: lowercase scheme and host, remove fragment (#...), remove trailing slash from path (except root "/"), keep query string.
   - Example: `HTTPS://Example.com/Blog/Post/#intro` -> `https://example.com/Blog/Post`
 - Dedupe + restore logic (match by source_url for URL, content_hash for NOTE):
-  - no match -> insert row with status SUBMITTED -> 201 with item.
+  - no match -> insert row with status SUBMITTED -> 201 `{ "item": Item }`.
+  - a race on the unique index (23505) -> 409 `ALREADY_EXISTS`.
   - match, deleted_at null -> 409 code `ALREADY_EXISTS`.
   - match, deleted_at not null -> set deleted_at null:
     - if status FAILED -> status SUBMITTED, retry_count 0, error_message null.
     - if status READY -> unchanged (no re-fetch, no re-embedding).
-    - -> 200 with item.
+    - -> 200 `{ "item": Item }`.
+    - if another request restored it first -> 409 `ALREADY_EXISTS`.
   - restore keeps the old title (a new title in the request is ignored).
 - Response returns quickly; processing happens in the worker.
 
@@ -192,7 +201,7 @@ Error shape: `{ "error": { "code": string, "message": string } }`
   - preview: NOTE -> first 200 chars of raw_content; URL -> null.
 
 ### DELETE /items/:id
-- 404 if not found or already deleted.
+- 404 if not found, already deleted or the id is not a uuid.
 - 409 code `ITEM_BUSY` if status is SUBMITTED or PROCESSING.
 - Else set deleted_at = now() -> 204.
 
@@ -275,8 +284,8 @@ Pages:
   - add form with tabs Note / URL. Note has an optional title and content with a live char count (max 50,000). URL has one input.
   - shows 409 "Already saved" and 400 validation messages.
   - items list: type icon, title, URL link or note preview, status badge, error message (FAILED), created time.
-  - delete button only for READY and FAILED items, with a confirm dialog.
-  - polls GET /items every 5s while any item is SUBMITTED or PROCESSING; stops otherwise.
+  - delete button only for READY and FAILED items, with a confirm dialog (`window.confirm`).
+  - polls GET /items every 5s while any item is SUBMITTED or PROCESSING; stops otherwise. Only the latest GET /items response is applied.
 - Nav: top bar with Ask, Library and Logout.
 - Vercel Analytics component added at the root.
 - Env: VITE_API_URL.
