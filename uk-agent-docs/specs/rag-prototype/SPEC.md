@@ -245,7 +245,7 @@ Each run:
 
 ## 10. Auth
 
-- Backend env: APP_PASSWORD (min 12 chars, not trimmed), TOKEN_SECRET (min 32 chars).
+- Backend env: APP_PASSWORD (any length, not blank, not trimmed), TOKEN_SECRET (min 32 chars).
 - Token: JWT HS256 with payload `{ sub: "owner" }` and expiry of 7 days.
 - Middleware checks the Bearer token. Missing, invalid or expired -> 401 `UNAUTHORIZED`.
   - verify allows only HS256 and `sub: "owner"`.
