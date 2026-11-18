@@ -14,15 +14,18 @@ Blocks: TICKET-4, TICKET-5, TICKET-6, TICKET-7
   - `chunks` table with FK on delete cascade, plus an HNSW cosine index.
   - RLS enabled on both tables with no policies.
   - functions `claim_jobs`, `reset_stuck_jobs`, `match_chunks` exactly as SPEC 7 describes.
-- `apps/api/src/db.ts`: a Supabase client using the service role key, plus typed row types.
+- `backend/src/db.ts`: a Supabase client using the service role key, plus typed row types.
 - `render.yaml`:
-  - Node web service.
-  - build installs bun, then runs `bun install --frozen-lockfile` and builds api + shared.
-  - start command `node apps/api/dist/index.js`.
+  - Node web service with `rootDir: backend`.
+  - build installs bun, then runs `bun install --frozen-lockfile && bun run build`.
+  - start command `node dist/index.js`.
   - health check path `/health`.
   - env var keys listed (values set in the dashboard).
-- `apps/web/vercel.json`: SPA rewrite to index.html. Document the Vercel settings (root `apps/web`, install `bun install`, build `bun run build`, output `dist`).
-- `.github/workflows/ci.yml`: on push/PR it sets up bun and Node, then runs install, typecheck, lint, test and build.
+- `frontend/vercel.json`: SPA rewrite to index.html. Document the Vercel settings (root `frontend`, install `bun install`, build `bun run build`, output `dist`).
+- `.github/workflows/ci.yml`:
+  - two separate jobs, `frontend` and `backend`, each with `working-directory` set to its folder.
+  - each job sets up bun and Node, then runs install, typecheck, lint, test and build.
+  - path filters so a job runs only when its folder (or the workflow file) changes.
 - `README.md` at the root: local setup steps and the manual setup list from SPEC 14.
 
 ## Acceptance criteria

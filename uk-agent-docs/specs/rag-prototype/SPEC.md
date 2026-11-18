@@ -29,7 +29,7 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 
 | Area | Choice |
 |---|---|
-| Repo | Monorepo, bun workspaces (bun = package manager only) |
+| Repo | Monorepo with two independent projects, `frontend/` and `backend/`. Each has its own package.json, bun.lock, tsconfig and tooling. No root workspace, no shared package. Bun is the package manager only |
 | Language | TypeScript everywhere |
 | Frontend | React + Vite, TailwindCSS, shadcn/ui, react-router, react-markdown, @vercel/analytics |
 | Backend | Node + Express (runtime is Node, not bun) |
@@ -48,20 +48,32 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 
 ```
 /
-├── package.json            # bun workspaces: apps/*, packages/*
-├── bun.lock
-├── apps/
-│   ├── web/                # Vite React app (deployed to Vercel)
-│   └── api/                # Express app + worker (deployed to Render)
-├── packages/
-│   └── shared/             # API request/response types, constants
+├── frontend/               # Vite React app (deployed to Vercel)
+│   ├── package.json
+│   ├── bun.lock
+│   └── src/
+│       ├── constants.ts    # only the constants the UI needs
+│       └── types/api.ts    # copy of API contract types
+├── backend/                # Express app + worker (deployed to Render)
+│   ├── package.json
+│   ├── bun.lock
+│   └── src/
+│       ├── constants.ts    # all constants from section 6
+│       └── types/api.ts    # source of truth for API contract types
 ├── supabase/
 │   └── migrations/         # SQL migrations
-├── render.yaml
-└── .github/workflows/ci.yml
+├── render.yaml             # rootDir: backend
+├── README.md
+└── .github/workflows/ci.yml # separate jobs for frontend and backend
 ```
 
-## 6. Constants (packages/shared)
+- No root package.json. Commands run inside each folder.
+- The two projects never import each other.
+- API contract types (Item, Citation, ingest request, error shape, SSE events) live in `backend/src/types/api.ts`. They are copied by hand to `frontend/src/types/api.ts`, and any API change must update both files.
+
+## 6. Constants
+
+All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` copies only NOTE_MAX_CHARS, QUERY_MAX_CHARS, ITEMS_POLL_MS and NOT_FOUND_ANSWER.
 
 | Name | Value |
 |---|---|
@@ -197,7 +209,7 @@ Error shape: `{ "error": { "code": string, "message": string } }`
 
 ## 9. Ingestion worker
 
-Runs inside the api process with node-cron, every 1 minute. Has an in-memory `isRunning` flag so runs never overlap.
+Runs inside the backend process with node-cron, every 1 minute. Has an in-memory `isRunning` flag so runs never overlap.
 
 Each run:
 1. `reset_stuck_jobs(10, 3)`.
@@ -255,10 +267,10 @@ Pages:
 
 | App | Var |
 |---|---|
-| api | PORT, FRONTEND_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY, JINA_API_KEY, APP_PASSWORD, TOKEN_SECRET |
-| web | VITE_API_URL |
+| backend | PORT, FRONTEND_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY, JINA_API_KEY, APP_PASSWORD, TOKEN_SECRET |
+| frontend | VITE_API_URL |
 
-Both apps ship a `.env.example`. The api validates env vars at startup (zod) and exits with a clear message if one is missing.
+Both projects ship their own `.env.example`. The backend validates env vars at startup (zod) and exits with a clear message if one is missing.
 
 ## 13. Edge cases (must handle)
 
@@ -281,15 +293,15 @@ Both apps ship a `.env.example`. The api validates env vars at startup (zod) and
 
 - Create a Supabase project, enable pgvector, run the migrations, and copy the URL and service role key.
 - Get Groq and Jina API keys.
-- Create a Render web service from render.yaml and set the env vars.
-- Create a Vercel project (root apps/web), set VITE_API_URL, enable Analytics.
+- Create a Render web service from render.yaml (root dir `backend`) and set the env vars.
+- Create a Vercel project (root dir `frontend`), set VITE_API_URL, enable Analytics.
 - Create a cron-job.org job: GET `<render-url>/health` every 10 min.
 
 ## 15. Tickets
 
 | Ticket | Title | Blocked by | Blocks |
 |---|---|---|---|
-| [TICKET-1](tickets/TICKET-1.md) | Monorepo scaffolding + health API | - | 2, 3, 4, 5, 6, 7 |
+| [TICKET-1](tickets/TICKET-1.md) | Frontend + backend scaffolding + health API | - | 2, 3, 4, 5, 6, 7 |
 | [TICKET-2](tickets/TICKET-2.md) | DB schema, infra config, CI | 1 | 4, 5, 6, 7 |
 | [TICKET-3](tickets/TICKET-3.md) | Auth (login + guard) | 1 | 4, 6, 7 |
 | [TICKET-4](tickets/TICKET-4.md) | Library: ingest, list, soft delete | 1, 2, 3 | 5, 7 |

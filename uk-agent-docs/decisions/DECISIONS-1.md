@@ -50,9 +50,16 @@ Major, hard-to-reverse decisions. Newest last.
 ## D11: Retry policy (2026-11-17)
 - Decision: auto-retry up to 3 times (4 attempts), then FAILED with error_message. PROCESSING for over 10 min is reset (counts as a retry). No manual retry button.
 
-## D12: Monorepo + tooling (2026-11-17)
-- Decision: bun workspaces (`apps/web`, `apps/api`, `packages/shared`), TypeScript everywhere. Bun is only the package manager; the backend runtime is Node.
-- Rejected: npm workspaces; the Bun runtime on Render.
+## D12: Monorepo + tooling (2026-11-17, updated 2026-11-18)
+- Decision:
+  - one repo with two independent projects, `frontend/` and `backend/`.
+  - each has its own package.json, bun.lock and tooling.
+  - no root workspace and no shared package.
+  - API types are copied by hand into each project.
+  - TypeScript everywhere. Bun is only the package manager; the backend runtime is Node.
+- Why: the user wants the frontend and backend kept separate.
+- Trade-off: the API types must be kept in sync by hand.
+- Rejected: bun workspaces with a shared package (the 2026-11-17 version); npm workspaces; the Bun runtime on Render.
 
 ## D13: Size limits (2026-11-17)
 - Decision: notes are max 50,000 chars (400 if longer). URL content is cut off at 200,000 chars. Queries are max 1,000 chars.

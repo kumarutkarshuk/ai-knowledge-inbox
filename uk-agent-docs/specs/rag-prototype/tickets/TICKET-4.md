@@ -14,7 +14,7 @@ Backend:
   - dedupe + restore logic exactly as SPEC 8. Restoring a FAILED item resets status to SUBMITTED, retry_count to 0 and error_message to null.
   - handle a race on the unique index (Postgres error 23505) as 409 ALREADY_EXISTS.
   - NOTE title = trimmed user title, else the first 60 chars of the trimmed content.
-- `GET /items`: non-deleted items, newest first, mapped to the shared `Item` type (title fallback, 200-char note preview).
+- `GET /items`: non-deleted items, newest first, mapped to the `Item` type in `backend/src/types/api.ts` (title fallback, 200-char note preview).
 - `DELETE /items/:id`:
   - 404 if missing or already deleted.
   - 409 ITEM_BUSY if SUBMITTED or PROCESSING.

@@ -7,7 +7,7 @@ Blocks: none
 
 ## Scope
 
-- Check that the render.yaml build/start works on Render and the Vercel build works for apps/web (the user does the dashboard steps from SPEC 14).
+- Check that the render.yaml build/start works on Render and the Vercel build works for `frontend/` (the user does the dashboard steps from SPEC 14).
 - Check that CORS works between the Vercel origin and the Render API.
 - Check that SSE streams through Render without buffering (tokens arrive one by one, not all at the end).
 - Frontend: a cold-start friendly loading state and a "server waking up" hint when a request takes over 5s.

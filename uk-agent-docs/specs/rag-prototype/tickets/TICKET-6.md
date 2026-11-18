@@ -17,7 +17,7 @@ Backend:
   - prompt template with numbered context chunks and the SPEC 8 rules.
   - AbortController tied to `req.on('close')`.
   - errors after the stream starts -> `error` event, then end.
-- SSE event writer helper using the shared event types.
+- SSE event writer helper using the SSE event types from `backend/src/types/api.ts`. If they change, update the copy in `frontend/src/types/api.ts` too.
 
 Frontend (`/`):
 - Perplexity-like layout: a centered question box that moves to the bottom after the first question.

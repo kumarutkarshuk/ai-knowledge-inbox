@@ -18,7 +18,7 @@ Product: AI Knowledge Inbox. A single-user app to save notes and URLs and ask qu
 | READY | Chunks and embeddings stored | Searchable by Ask. |
 | FAILED | Gave up after 3 retries (4 attempts) | error_message is shown in the Library. |
 | Retry | Automatic re-queue after an error | retry_count + 1; at 4 failures the item becomes FAILED. No manual retry button. |
-| Worker | node-cron task inside the api process | Runs every 1 min, takes max 3 jobs, never overlaps itself. |
+| Worker | node-cron task inside the backend process | Runs every 1 min, takes max 3 jobs, never overlaps itself. |
 | Jina Reader | Service that turns a URL into clean text | `https://r.jina.ai/<url>`. Gives the title and content. Content is cut off at 200k chars. |
 | Chunk | A piece of item text, 1000 chars with 200 overlap | Stored with a 1024-dim embedding in `chunks`. |
 | Embedding | A vector from Jina `jina-embeddings-v3` | Passages and queries use different task types. |
