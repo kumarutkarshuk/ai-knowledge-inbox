@@ -1,4 +1,6 @@
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useNavigate } from "react-router";
+import { Button } from "@/components/ui/button";
+import { clearToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -7,6 +9,13 @@ const links = [
 ];
 
 export function Layout() {
+  const navigate = useNavigate();
+
+  function logout() {
+    clearToken();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="min-h-svh">
       <header className="border-b">
@@ -29,6 +38,9 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={logout}>
+            Logout
+          </Button>
         </div>
       </header>
       <main className="mx-auto max-w-4xl p-4">

@@ -1,6 +1,6 @@
 # SPEC: AI Knowledge Inbox (RAG prototype)
 
-Status: in progress, TICKET-1 and TICKET-2 done (2026-11-18)
+Status: in progress, TICKET-1, TICKET-2 and TICKET-3 done (2026-11-18)
 Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
 
 ## 1. Goal
@@ -160,8 +160,12 @@ Error shape: `{ "error": { "code": string, "message": string } }`
 ### POST /login
 - Body: `{ "password": string }`
 - Timing-safe compare with APP_PASSWORD.
-- 200 `{ "token": string, "expiresAt": string }`; 401 on wrong password.
-- Rate limit: 5 requests per minute per IP.
+- 200 `{ "token": string, "expiresAt": string }` (expiresAt is ISO 8601).
+- 400 `VALIDATION_ERROR` if password is missing, empty or not a string. Body limit 1kb (413 above it).
+- 401 `UNAUTHORIZED` on wrong password.
+- Rate limit: 5 requests per minute per IP (all attempts count, right or wrong). 6th -> 429 `TOO_MANY_REQUESTS`. Counts are in memory (reset on restart; fine for one instance).
+- Wrong password and rate-limit hits are logged with `req.ip` (console.warn).
+- Client IP comes from `X-Forwarded-For` with Express `trust proxy` = 1 hop (TRUST_PROXY_HOPS), so a client cannot fake its IP by adding entries on the left.
 
 ### POST /ingest
 - Body: `{ "type": "NOTE", "content": string, "title"?: string }` or `{ "type": "URL", "url": string }`
@@ -241,14 +245,19 @@ Each run:
 
 ## 10. Auth
 
-- Backend env: APP_PASSWORD, TOKEN_SECRET.
+- Backend env: APP_PASSWORD (any length, not blank, not trimmed), TOKEN_SECRET (min 32 chars).
 - Token: JWT HS256 with payload `{ sub: "owner" }` and expiry of 7 days.
 - Middleware checks the Bearer token. Missing, invalid or expired -> 401 `UNAUTHORIZED`.
+  - verify allows only HS256 and `sub: "owner"`.
+  - runs before the JSON body parser for protected routes, so a request without a valid token never has its body parsed.
+  - unknown routes without a token get 401 (not 404).
+- Password compare: sha256 of both sides, then `crypto.timingSafeEqual`.
 - Frontend:
-  - stores the token in localStorage.
+  - stores `{ token, expiresAt }` in localStorage key `session`; `getToken` drops it once expiresAt has passed, so the guard sends an expired session to /login without an API call.
   - every request adds the Authorization header.
-  - on any 401 it clears the token and redirects to /login.
-  - routes other than /login are guarded.
+  - on any 401 for a request that sent a token, it clears the token and redirects to /login (full page load). A 401 from /login (wrong password, no token sent) only shows the error.
+  - routes other than /login are guarded (`RequireAuth`); /login with a token goes to /.
+  - `apiFetch` returns the raw Response (for SSE); `apiJson` parses JSON; both throw `ApiError { status, code, message }`.
 
 ## 11. Frontend
 

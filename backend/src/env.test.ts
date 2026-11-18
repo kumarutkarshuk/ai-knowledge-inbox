@@ -68,6 +68,14 @@ describe("parseEnv", () => {
     expect(env.FRONTEND_ORIGIN).toBe("https://app.example.com");
   });
 
+  it("accepts a short APP_PASSWORD", () => {
+    expect(parseEnv({ ...validEnv, APP_PASSWORD: "abc" }).APP_PASSWORD).toBe("abc");
+  });
+
+  it("keeps APP_PASSWORD exactly as set, without trimming", () => {
+    expect(parseEnv(validEnv).APP_PASSWORD).toBe(validEnv.APP_PASSWORD);
+  });
+
   it("rejects a short TOKEN_SECRET", () => {
     expect(messageFor({ ...validEnv, TOKEN_SECRET: "short" })).toContain("TOKEN_SECRET");
   });

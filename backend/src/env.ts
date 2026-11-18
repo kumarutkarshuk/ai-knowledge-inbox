@@ -9,7 +9,7 @@ const envSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/, error: "must be a postgres:// URL" }),
   GROQ_API_KEY: required,
   JINA_API_KEY: required,
-  APP_PASSWORD: required,
+  APP_PASSWORD: z.string().refine((value) => value.trim().length > 0),
   TOKEN_SECRET: z.string().trim().min(TOKEN_SECRET_MIN_CHARS),
 });
 

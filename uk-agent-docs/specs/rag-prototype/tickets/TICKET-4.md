@@ -37,3 +37,4 @@ Frontend (`/library`):
 - Deleting a SUBMITTED item gets 409.
 - A 50,001-char note gets 400. A `ftp://` URL gets 400.
 - Unit tests cover normalizeUrl, hashNote and the restore decision logic.
+- With a tampered token in localStorage (`session` key), opening /library gets 401 from GET /items and lands on /login.
