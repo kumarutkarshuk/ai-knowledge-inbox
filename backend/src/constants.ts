@@ -1,0 +1,19 @@
+export const NOTE_MAX_CHARS = 50_000;
+export const URL_CONTENT_MAX_CHARS = 200_000;
+export const NOTE_TITLE_FALLBACK_CHARS = 60;
+export const QUERY_MAX_CHARS = 1_000;
+export const CHUNK_SIZE = 1000;
+export const CHUNK_OVERLAP = 200;
+export const TOP_K = 5;
+export const MIN_SIMILARITY = 0.5;
+export const CRON_SCHEDULE = "* * * * *";
+export const JOBS_PER_RUN = 3;
+export const MAX_RETRIES = 3;
+export const STUCK_AFTER_MINUTES = 10;
+export const TOKEN_TTL = "7d";
+export const ITEMS_POLL_MS = 5000;
+export const NOT_FOUND_ANSWER = "Not found in your saved items.";
+
+export const JSON_BODY_LIMIT = "1mb";
+export const DEFAULT_PORT = 3000;
+export const TOKEN_SECRET_MIN_CHARS = 32;
