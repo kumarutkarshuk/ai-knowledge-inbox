@@ -36,6 +36,15 @@ export interface UrlIngestRequest {
 
 export type IngestRequest = NoteIngestRequest | UrlIngestRequest;
 
+export interface LoginRequest {
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  expiresAt: string;
+}
+
 export interface ErrorResponse {
   error: {
     code: string;

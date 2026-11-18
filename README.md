@@ -51,7 +51,7 @@ For a local (non-Supabase) database, add `?sslmode=disable` to `DATABASE_URL`.
 2. API keys: get a Groq key (`GROQ_API_KEY`) and a Jina key (`JINA_API_KEY`).
 3. Render (backend)
    - New -> Blueprint -> pick this repo; it reads `render.yaml` (root dir `backend`, health check `/health`).
-   - Set `FRONTEND_ORIGIN`, `DATABASE_URL`, `GROQ_API_KEY`, `JINA_API_KEY`, `APP_PASSWORD`. `TOKEN_SECRET` is generated; `PORT` is set by Render.
+   - Set `FRONTEND_ORIGIN`, `DATABASE_URL`, `GROQ_API_KEY`, `JINA_API_KEY`, `APP_PASSWORD` (at least 12 chars). `TOKEN_SECRET` is generated; `PORT` is set by Render.
 4. Vercel (frontend)
    - New project from this repo with root directory `frontend`.
    - Install `bun install`, build `bun run build`, output `dist` (already set in `frontend/vercel.json`, which also rewrites all routes to `index.html`).

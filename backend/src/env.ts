@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_PORT, TOKEN_SECRET_MIN_CHARS } from "./constants.js";
+import { APP_PASSWORD_MIN_CHARS, DEFAULT_PORT, TOKEN_SECRET_MIN_CHARS } from "./constants.js";
 
 const required = z.string().trim().min(1);
 
@@ -9,7 +9,9 @@ const envSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/, error: "must be a postgres:// URL" }),
   GROQ_API_KEY: required,
   JINA_API_KEY: required,
-  APP_PASSWORD: required,
+  APP_PASSWORD: z.string().refine((value) => value.trim().length >= APP_PASSWORD_MIN_CHARS, {
+    error: `must be at least ${APP_PASSWORD_MIN_CHARS} chars`,
+  }),
   TOKEN_SECRET: z.string().trim().min(TOKEN_SECRET_MIN_CHARS),
 });
 

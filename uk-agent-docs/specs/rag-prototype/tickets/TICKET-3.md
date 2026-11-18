@@ -2,6 +2,8 @@
 
 Spec: [SPEC.md](../SPEC.md) sections 8 (POST /login), 10, 11 (/login)
 
+Status: done (2026-11-18)
+
 Blocked by: TICKET-1
 Blocks: TICKET-4, TICKET-6, TICKET-7
 

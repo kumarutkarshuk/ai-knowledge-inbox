@@ -1,8 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getToken, setToken } from "@/lib/auth";
 import { routes } from "@/routes";
+
+const future = new Date(Date.now() + 60_000).toISOString();
 
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
@@ -15,6 +18,14 @@ function nav() {
 }
 
 describe("routes", () => {
+  beforeEach(() => {
+    setToken("tok", future);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
   it("renders the nav with Ask and Library on /", () => {
     renderAt("/");
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/");
@@ -37,6 +48,7 @@ describe("routes", () => {
   });
 
   it("renders /login without the nav", () => {
+    localStorage.clear();
     renderAt("/login");
     expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
     expect(nav()).not.toBeInTheDocument();
@@ -46,5 +58,37 @@ describe("routes", () => {
     const router = renderAt("/does-not-exist");
     expect(router.state.location.pathname).toBe("/");
     expect(nav()).toBeInTheDocument();
+  });
+});
+
+describe("route guard", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it.each(["/", "/library", "/does-not-exist"])("sends %s to /login without a token", (path) => {
+    const router = renderAt(path);
+    expect(router.state.location.pathname).toBe("/login");
+    expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
+    expect(nav()).not.toBeInTheDocument();
+  });
+
+  it("sends / to /login when the stored token has expired", () => {
+    setToken("tok", new Date(Date.now() - 1000).toISOString());
+    const router = renderAt("/");
+    expect(router.state.location.pathname).toBe("/login");
+  });
+
+  it("logout clears the token and goes to /login", async () => {
+    setToken("tok", future);
+    const user = userEvent.setup();
+    const router = renderAt("/library");
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+    expect(getToken()).toBeNull();
+    expect(router.state.location.pathname).toBe("/login");
+
+    await act(() => router.navigate("/library"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
   });
 });

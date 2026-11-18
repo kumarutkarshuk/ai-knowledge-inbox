@@ -60,6 +60,19 @@ describe.skipIf(!adminUrl)("backend process with a database", () => {
       const res = await fetch(`http://localhost:${port}/health`);
       expect(res.status).toBe(200);
       expect(await res.text()).toBe('{"status":"ok"}');
+      const base = `http://localhost:${port}`;
+      expect((await fetch(`${base}/items`)).status).toBe(401);
+      const login = await fetch(`${base}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: env.APP_PASSWORD }),
+      });
+      expect(login.status).toBe(200);
+      const { token } = (await login.json()) as { token: string };
+      const authed = await fetch(`${base}/items`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(authed.status).toBe(404);
       expect(stdout).toContain("Migrations applied: 0001_init");
       const { rows } = await db.pool.query("select to_regclass('public.knowledge_base') as t");
       expect(rows[0].t).toBe("knowledge_base");
