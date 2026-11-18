@@ -18,9 +18,4 @@ describe("createPool", () => {
     expect(pool.options.connectionTimeoutMillis).toBe(DB_CONNECT_TIMEOUT_MS);
     expect(pool.listenerCount("error")).toBe(1);
   });
-
-  it("can turn SSL off for a local database", () => {
-    pool = createPool(validEnv.DATABASE_URL, false);
-    expect(pool.options.ssl).toBe(false);
-  });
 });

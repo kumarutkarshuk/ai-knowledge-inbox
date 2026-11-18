@@ -57,11 +57,10 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 ├── backend/                # Express app + worker (deployed to Render)
 │   ├── package.json
 │   ├── bun.lock
+│   ├── migrations/         # SQL migrations, applied at startup
 │   └── src/
 │       ├── constants.ts    # all constants from section 6
 │       └── types/api.ts    # source of truth for API contract types
-├── supabase/
-│   └── migrations/         # SQL migrations
 ├── render.yaml             # rootDir: backend
 ├── README.md
 └── .github/workflows/ci.yml # separate jobs for frontend and backend
@@ -142,6 +141,8 @@ Plain SQL sent with `pg`. No job or search functions live in the database (see D
   - throws before querying if the embedding is not EMBEDDING_DIMS (1024) finite numbers.
 - Counts (`batch`, `matchCount`, `stuckMinutes`, `maxRetries`) must be non-negative integers, else the function throws before querying.
 - `db` is a pool or a checked-out client, so callers can run claimJobs inside their own transaction.
+
+Migrations: SQL files in `backend/migrations/`, applied by node-pg-migrate at backend startup, before the server listens (see DECISIONS-1 D16). Applied files are recorded in `migrations.pgmigrations` (not in `public`, so the Supabase REST API does not expose it). If a migration fails, the backend exits with code 1.
 
 Privileges: when the Supabase roles `anon` and `authenticated` exist, the migration revokes all table privileges from them.
 
@@ -299,7 +300,7 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 
 ## 14. Manual setup by the user
 
-- Create a Supabase project, enable pgvector, run the migrations, and copy the session pooler connection string (Connect -> Session pooler, port 5432) as DATABASE_URL.
+- Create a Supabase project, enable pgvector, and copy the session pooler connection string (Connect -> Session pooler, port 5432) as DATABASE_URL.
 - Get Groq and Jina API keys.
 - Create a Render web service from render.yaml (root dir `backend`) and set the env vars.
 - Create a Vercel project (root dir `frontend`), set VITE_API_URL, enable Analytics.

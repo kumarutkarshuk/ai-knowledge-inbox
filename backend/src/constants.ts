@@ -20,3 +20,6 @@ export const TOKEN_SECRET_MIN_CHARS = 32;
 export const DB_CONNECT_TIMEOUT_MS = 10_000;
 export const DB_QUERY_TIMEOUT_MS = 15_000;
 export const EMBEDDING_DIMS = 1024;
+export const MIGRATIONS_SCHEMA = "migrations";
+export const MIGRATIONS_TABLE = "pgmigrations";
+export const MIGRATION_LOCK_TIMEOUT_MS = 30_000;

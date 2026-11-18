@@ -79,3 +79,11 @@ Major, hard-to-reverse decisions. Newest last.
 - Kept: claimJobs is still one statement with `FOR UPDATE SKIP LOCKED` (atomic, no app transaction). matchChunks runs in a short transaction to `set local hnsw.iterative_scan`.
 - Trade-off: matchChunks takes 4 round trips (begin, set, select, commit) instead of 1.
 - Rejected: SQL functions called with `select * from fn(...)` (the earlier TICKET-2 version).
+
+## D16: Migrations run at backend startup (2026-11-18)
+- Decision: SQL files live in `backend/migrations/` and node-pg-migrate applies new ones when the backend starts, before it listens. History is in `migrations.pgmigrations`.
+- Why: the user wants migrations applied automatically on server start. They live inside `backend/` because Render does not make files outside the service's rootDir available at build or runtime.
+- Trade-off: a failed migration stops the server from booting (Render keeps the old instance because the new one fails its health check). Migrations are forward-only (no down files).
+- Rule: during a deploy the old instance keeps running on the new schema, so each migration must stay compatible with the previous code (add first, remove in a later deploy).
+- Rule: never edit a migration file that has run anywhere; add a new file instead.
+- Rejected: running them by hand in the Supabase SQL editor; the Supabase CLI (`supabase db push`) from CI; a hand-written migrator (node-pg-migrate already does locking and tracking).

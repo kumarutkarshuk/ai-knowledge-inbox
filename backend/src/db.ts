@@ -2,10 +2,10 @@ import pg from "pg";
 import { DB_CONNECT_TIMEOUT_MS } from "./constants.js";
 import type { ItemStatus, ItemType } from "./types/api.js";
 
-export function createPool(databaseUrl: string, ssl = true): pg.Pool {
+export function createPool(databaseUrl: string): pg.Pool {
   const pool = new pg.Pool({
     connectionString: databaseUrl,
-    ssl: ssl ? { rejectUnauthorized: false } : false,
+    ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
   });
   pool.on("error", (err) => {

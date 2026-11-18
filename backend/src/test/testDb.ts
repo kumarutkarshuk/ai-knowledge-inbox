@@ -1,14 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
 import pg from "pg";
 import { expect, vi } from "vitest";
 import { EMBEDDING_DIMS } from "../constants.js";
 import { createPool, type KnowledgeBaseRow } from "../db.js";
+import { runMigrations } from "../migrate.js";
 
 export const adminUrl = process.env.TEST_DATABASE_URL ?? "";
-
-const migrationsDir = path.resolve(import.meta.dirname, "..", "..", "..", "supabase", "migrations");
 
 export function first<T>(rows: T[]): T {
   const [row] = rows;
@@ -29,12 +26,13 @@ export interface TestDb {
   drop: () => Promise<void>;
 }
 
-export async function createTestDb(): Promise<TestDb> {
+export async function createTestDb({ migrate = true } = {}): Promise<TestDb> {
   const name = `test_${randomUUID().replaceAll("-", "")}`;
   const admin = new pg.Client({ connectionString: adminUrl });
   await admin.connect();
   const url = new URL(adminUrl);
   url.pathname = `/${name}`;
+  url.searchParams.set("sslmode", "disable");
   let pool: pg.Pool | undefined;
 
   async function drop() {
@@ -55,13 +53,8 @@ export async function createTestDb(): Promise<TestDb> {
 
   try {
     await admin.query(`create database ${name}`);
-    pool = createPool(url.toString(), false);
-    const files = readdirSync(migrationsDir)
-      .filter((file) => file.endsWith(".sql"))
-      .sort();
-    for (const file of files) {
-      await pool.query(readFileSync(path.join(migrationsDir, file), "utf8"));
-    }
+    pool = createPool(url.toString());
+    if (migrate) await runMigrations(pool);
     return { url: url.toString(), pool, drop };
   } catch (err) {
     await drop();
