@@ -14,7 +14,7 @@ Blocks: TICKET-4, TICKET-5, TICKET-6, TICKET-7
   - `chunks` table with FK on delete cascade, plus an HNSW cosine index.
   - RLS enabled on both tables with no policies.
   - functions `claim_jobs`, `reset_stuck_jobs`, `match_chunks` exactly as SPEC 7 describes.
-- `backend/src/db.ts`: a Supabase client using the service role key, plus typed row types.
+- `backend/src/db.ts`: a `pg` Pool built from DATABASE_URL (session pooler, SSL on), plus typed row types. SQL functions are called with plain SQL (`select * from claim_jobs($1)`).
 - `render.yaml`:
   - Node web service with `rootDir: backend`.
   - build installs bun, then runs `bun install --frozen-lockfile && bun run build`.

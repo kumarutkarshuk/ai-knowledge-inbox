@@ -1,6 +1,6 @@
 # SPEC: AI Knowledge Inbox (RAG prototype)
 
-Status: planned, not started (2026-11-17)
+Status: in progress, TICKET-1 done (2026-11-18)
 Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
 
 ## 1. Goal
@@ -34,7 +34,7 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 | Frontend | React + Vite, TailwindCSS, shadcn/ui, react-router, react-markdown, @vercel/analytics |
 | Backend | Node + Express (runtime is Node, not bun) |
 | Scheduler | node-cron inside the backend process |
-| DB | Supabase Postgres + pgvector |
+| DB | Supabase Postgres + pgvector, reached through the session pooler connection string (DATABASE_URL) with `pg` (node-postgres). No supabase-js, no service role key |
 | RAG lib | Langchain (RecursiveCharacterTextSplitter, Jina embeddings, ChatGroq) |
 | LLM | Groq `llama-3.3-70b-versatile` |
 | Embeddings | Jina `jina-embeddings-v3`, 1024 dims (`retrieval.passage` for chunks, `retrieval.query` for queries) |
@@ -131,13 +131,13 @@ Constraints / indexes:
 - HNSW index on embedding with vector_cosine_ops.
 - Chunks are kept when an item is soft deleted (so restore is instant).
 
-### SQL functions (called with supabase.rpc)
+### SQL functions (called with plain SQL via `pg`, e.g. `select * from claim_jobs($1)`)
 
 - `claim_jobs(batch int)`: atomically picks up to `batch` rows where status = 'SUBMITTED' and deleted_at is null, ordered by created_at, using `FOR UPDATE SKIP LOCKED`; sets status = 'PROCESSING'; returns the rows.
 - `reset_stuck_jobs(stuck_minutes int, max_retries int)`: rows with status 'PROCESSING' and modified_at older than `stuck_minutes` -> retry_count + 1; status 'SUBMITTED' if retry_count <= max_retries, else 'FAILED' with error_message 'Processing timed out'.
 - `match_chunks(query_embedding vector(1024), match_count int, min_similarity float)`: returns chunk id, item_id, content, similarity (1 - cosine distance) plus item type, title, source_url; only items with status 'READY' and deleted_at null; similarity >= min_similarity; ordered by similarity desc; limit match_count.
 
-Backend uses the Supabase service role key. RLS enabled on both tables with no policies (only service role can access).
+Backend connects as the `postgres` role through DATABASE_URL (session pooler, port 5432). This role owns the tables, so RLS does not apply to it. RLS enabled on both tables with no policies, so the public Supabase REST API (anon/authenticated keys) cannot read or write them.
 
 ## 8. API
 
@@ -267,7 +267,7 @@ Pages:
 
 | App | Var |
 |---|---|
-| backend | PORT, FRONTEND_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY, JINA_API_KEY, APP_PASSWORD, TOKEN_SECRET |
+| backend | PORT, FRONTEND_ORIGIN, DATABASE_URL, GROQ_API_KEY, JINA_API_KEY, APP_PASSWORD, TOKEN_SECRET |
 | frontend | VITE_API_URL |
 
 Both projects ship their own `.env.example`. The backend validates env vars at startup (zod) and exits with a clear message if one is missing.
@@ -291,7 +291,7 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 
 ## 14. Manual setup by the user
 
-- Create a Supabase project, enable pgvector, run the migrations, and copy the URL and service role key.
+- Create a Supabase project, enable pgvector, run the migrations, and copy the session pooler connection string (Connect -> Session pooler, port 5432) as DATABASE_URL.
 - Get Groq and Jina API keys.
 - Create a Render web service from render.yaml (root dir `backend`) and set the env vars.
 - Create a Vercel project (root dir `frontend`), set VITE_API_URL, enable Analytics.
