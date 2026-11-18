@@ -1,5 +1,5 @@
 import pg from "pg";
-import { DB_CONNECT_TIMEOUT_MS } from "./constants.js";
+import { DB_CONNECT_TIMEOUT_MS, DB_QUERY_TIMEOUT_MS } from "./constants.js";
 import type { ItemStatus, ItemType } from "./types/api.js";
 
 export function createPool(databaseUrl: string): pg.Pool {
@@ -37,6 +37,16 @@ export async function withTransaction<T>(
     client.off("error", onError);
     client.release(broken);
   }
+}
+
+export function withTimedTransaction<T>(
+  pool: pg.Pool,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  return withTransaction(pool, async (client) => {
+    await client.query(`set local statement_timeout = ${DB_QUERY_TIMEOUT_MS}`);
+    return work(client);
+  });
 }
 
 export interface KnowledgeBaseRow {

@@ -1,4 +1,5 @@
 import type pg from "pg";
+import type { ItemStatus } from "./types/api.js";
 import { DB_QUERY_TIMEOUT_MS, EMBEDDING_DIMS } from "./constants.js";
 import { withTransaction, type KnowledgeBaseRow, type MatchChunkRow } from "./db.js";
 
@@ -91,4 +92,49 @@ export async function matchChunks(
     ]);
     return rows;
   });
+}
+
+export async function saveUrlContent(
+  db: Queryable,
+  id: string,
+  page: { title: string | null; content: string },
+): Promise<void> {
+  await db.query(
+    `update knowledge_base set title = coalesce($2, title), raw_content = $3
+     where id = $1 and status = 'PROCESSING'`,
+    [id, page.title, page.content],
+  );
+}
+
+export async function saveChunksAndMarkReady(
+  client: pg.PoolClient,
+  id: string,
+  chunks: { content: string; embedding: number[] }[],
+): Promise<boolean> {
+  const { rowCount } = await client.query(
+    `update knowledge_base set status = 'READY', error_message = null
+     where id = $1 and status = 'PROCESSING'`,
+    [id],
+  );
+  if (!rowCount) return false;
+  await client.query("delete from chunks where item_id = $1", [id]);
+  await client.query(
+    `insert into chunks (item_id, chunk_index, content, embedding)
+     select $1, t.i - 1, t.content, t.embedding::vector
+     from unnest($2::text[], $3::text[]) with ordinality as t(content, embedding, i)`,
+    [id, chunks.map((c) => c.content), chunks.map((c) => JSON.stringify(c.embedding))],
+  );
+  return true;
+}
+
+export async function recordJobFailure(
+  db: Queryable,
+  id: string,
+  failure: { retryCount: number; status: ItemStatus; errorMessage: string },
+): Promise<void> {
+  await db.query(
+    `update knowledge_base set retry_count = $2, status = $3, error_message = $4
+     where id = $1 and status = 'PROCESSING'`,
+    [id, failure.retryCount, failure.status, failure.errorMessage],
+  );
 }

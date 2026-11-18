@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { createPool } from "./db.js";
 import { EnvError, parseEnv, type Env } from "./env.js";
 import { runMigrations } from "./migrate.js";
+import { startWorker } from "./worker/index.js";
 
 dotenv.config({ quiet: true });
 
@@ -24,7 +25,10 @@ try {
   process.exit(1);
 }
 
+let worker: ReturnType<typeof startWorker> | undefined;
+
 const server = createApp(env, pool).listen(env.PORT, () => {
+  worker = startWorker(pool, env.JINA_API_KEY);
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : env.PORT;
   console.log(`Backend listening on port ${port}`);
@@ -38,8 +42,11 @@ server.on("error", (err) => {
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, () => {
     console.log(`${signal} received, shutting down`);
+    const workerStopped = Promise.resolve(worker?.stop()).catch((err) =>
+      console.error("Worker stop failed:", err),
+    );
     server.close(() => {
-      pool.end().finally(() => process.exit(0));
+      workerStopped.finally(() => pool.end().finally(() => process.exit(0)));
     });
   });
 }
