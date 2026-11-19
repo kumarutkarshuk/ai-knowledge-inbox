@@ -16,7 +16,7 @@ Blocks: TICKET-2, TICKET-3, TICKET-4, TICKET-5, TICKET-6, TICKET-7
 - Root `.gitignore` covering node_modules, dist and .env in both folders.
 - `backend/`:
   - Express + TypeScript, built with tsc to `dist/` and run with Node.
-  - dev script with tsx watch.
+  - dev script with tsx watch (changed to `node --watch --import tsx` in TICKET-5, see SPEC 9).
   - env loading with zod validation (fail fast).
   - CORS for FRONTEND_ORIGIN, JSON body limit of 1mb, a central error handler that returns the SPEC error shape.
   - `GET /health` -> `{ status: "ok" }`.
