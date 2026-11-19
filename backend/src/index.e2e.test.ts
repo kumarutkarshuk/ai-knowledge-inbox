@@ -19,8 +19,9 @@ async function stop(child: ReturnType<typeof start>) {
   await once(child, "exit");
 }
 
-function start(env: Record<string, string>) {
+function start(env: Record<string, string>, options: { detached?: boolean } = {}) {
   return spawn(tsx, [entry], {
+    ...options,
     cwd: emptyDir,
     env: { PATH: process.env.PATH ?? "", ...env },
   });
@@ -77,6 +78,28 @@ describe.skipIf(!adminUrl)("backend process with a database", () => {
       expect(stdout).toContain("Migrations applied: 0001_init");
       const { rows } = await db.pool.query("select to_regclass('public.knowledge_base') as t");
       expect(rows[0].t).toBe("knowledge_base");
+    } finally {
+      await stop(child);
+    }
+  }, 30_000);
+
+  it("exits with code 0 when the process group gets SIGINT", async () => {
+    const child = start(env, { detached: true });
+    const pid = child.pid as number;
+    let stdout = "";
+    await new Promise<void>((resolve, reject) => {
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString();
+        if (stdout.includes("listening on port")) resolve();
+      });
+      child.on("exit", (code) => reject(new Error(`exited with ${code}`)));
+    });
+    try {
+      process.kill(-pid, "SIGINT");
+      process.kill(-pid, "SIGINT");
+      const [code] = await once(child, "exit");
+      expect(code).toBe(0);
+      expect(stdout.match(/shutting down/g)).toHaveLength(1);
     } finally {
       await stop(child);
     }

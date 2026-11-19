@@ -1,6 +1,6 @@
 # SPEC: AI Knowledge Inbox (RAG prototype)
 
-Status: in progress, TICKET-1 to TICKET-4 done (2026-11-18)
+Status: in progress, TICKET-1 to TICKET-5 done (2026-11-18)
 Related: [GLOSSARY-1](../../glossary/GLOSSARY-1.md), [DECISIONS-1](../../decisions/DECISIONS-1.md)
 
 ## 1. Goal
@@ -142,6 +142,12 @@ Plain SQL sent with `pg`. No job or search functions live in the database (see D
 - `matchChunks(pool, embedding, matchCount, minSimilarity)`: returns chunk id, item_id, content, similarity (1 - cosine distance) plus item type, title, source_url; only items with status 'READY' and deleted_at null; similarity >= minSimilarity; ordered by similarity desc; limit matchCount.
   - runs in a short transaction (`withTransaction` in `db.ts`) with `set local hnsw.iterative_scan = strict_order` (pgvector >= 0.8), so filtered-out chunks do not leave it with fewer than `matchCount` rows, and `set local statement_timeout` = DB_QUERY_TIMEOUT_MS (15s).
   - throws before querying if the embedding is not EMBEDDING_DIMS (1024) finite numbers.
+- Worker writes:
+  - `saveUrlContent(db, id, { title, content })`: sets raw_content, and title when Jina gives one.
+  - `saveChunksAndMarkReady(client, id, chunks)`: run inside a transaction; sets READY + error_message null, deletes old chunks, inserts the new ones (one `unnest` insert). Returns false and writes nothing if the row is no longer PROCESSING.
+  - `recordJobFailure(db, id, { retryCount, status, errorMessage })`.
+  - `releaseJob(db, id)`: back to SUBMITTED, retry_count and error_message unchanged (used on shutdown).
+  - all four only touch rows with status 'PROCESSING', so a run never overwrites a job that a stuck reset already took back.
 - Counts (`batch`, `matchCount`, `stuckMinutes`, `maxRetries`) must be non-negative integers, else the function throws before querying.
 - `db` is a pool or a checked-out client, so callers can run claimJobs inside their own transaction.
 
@@ -231,7 +237,11 @@ Error shape: `{ "error": { "code": string, "message": string } }`
 
 ## 9. Ingestion worker
 
-Runs inside the backend process with node-cron, every 1 minute. Has an in-memory `isRunning` flag so runs never overlap.
+Runs inside the backend process with node-cron, every 1 minute, started after the server listens. Has an in-memory guard (the promise of the current run) so runs never overlap.
+
+Code: `backend/src/worker/` (`jobs.ts`: createWorker, decideFailure; `extract.ts`: extractUrl; `chunk.ts`: chunkText; `index.ts`: startWorker) and `backend/src/rag/embeddings.ts` (embedPassages, embedQuery; reused by POST /query).
+
+Every worker DB call runs in a short transaction (`withTimedTransaction` in `db.ts`) with `set local statement_timeout` = DB_QUERY_TIMEOUT_MS, so a hung query cannot block the worker for ever. Jina calls (Reader and embeddings) time out after 30s and also take an optional AbortSignal (`withTimeout` in `rag/timeout.ts`).
 
 Each run:
 1. `resetStuckJobs(pool, 10, 3)`.
@@ -240,7 +250,7 @@ Each run:
    - URL:
      1. GET `https://r.jina.ai/<source_url>` with `Accept: application/json` and the Jina key; timeout 30s.
      2. Take `data.title` and `data.content`.
-     3. Empty or whitespace-only content -> error "No text content found".
+     3. Remove NUL chars (Postgres text cannot store them). Empty or whitespace-only content -> error "No text content found".
      4. Cut content off at 200,000 chars.
      5. Save raw_content and title.
    - NOTE: use raw_content as it is.
@@ -249,8 +259,10 @@ Each run:
    - Embed chunks with Jina (task `retrieval.passage`), in batches of up to 100.
    - Insert chunks.
    - Set status READY, error_message null.
-4. On error for a job: retry_count + 1; error_message = short error text; status SUBMITTED if retry_count <= 3, else FAILED.
+4. On error for a job: retry_count + 1; error_message = error text plus its cause (e.g. `fetch failed: getaddrinfo ENOTFOUND x`), max 200 chars; status SUBMITTED if retry_count <= 3, else FAILED.
 5. One failing job must not stop the other jobs in the same run.
+6. Logs: one JSON line per job (`event: worker.job`, id, type, result READY / RETRY / FAILED / SKIPPED, chunks or error, durationMs), one per stuck reset (`worker.stuck`), and `worker.run` with ERROR if the run itself fails.
+7. On SIGTERM/SIGINT (handled once; repeated signals are ignored) the cron stops and the worker aborts its Jina calls. The running job and any other claimed jobs go back to SUBMITTED with no retry counted (`releaseJob`, log result RELEASED), then the pool closes. With a remote DB this takes a few hundred ms. The dev script uses `node --watch --import tsx` (not `tsx watch`): under `bun run dev` a Ctrl+C reaches `tsx watch` twice and it SIGKILLs the backend at once, before the release can finish. `node --watch` sends SIGTERM and waits for the exit. On Render, SIGTERM goes straight to `node dist/index.js`. If the process is killed anyway, the stuck reset brings the job back after 10 min.
 
 ## 10. Auth
 
@@ -308,7 +320,7 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 - Delete during SUBMITTED or PROCESSING -> 409 ITEM_BUSY.
 - Jina Reader returns empty content, times out, or non-2xx -> retried, then FAILED with error_message.
 - Server restart while processing -> the stuck reset brings the job back after 10 min.
-- Two overlapping cron runs -> prevented by the isRunning flag and SKIP LOCKED.
+- Two overlapping cron runs -> prevented by the in-memory run guard and SKIP LOCKED.
 - Very large page -> cut off at 200k chars, still READY.
 - No chunk >= 0.5 similarity -> NOT_FOUND_ANSWER, no LLM call.
 - Deleted items never show up in GET /items or in query results.
