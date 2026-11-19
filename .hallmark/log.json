@@ -1,0 +1,25 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "newsprint",
+  "axes": "light/slab-serif/warm",
+  "hero": "none (app)",
+  "nav": "masthead bar, double rule",
+  "footer": "none",
+  "imagery": "none",
+  "photos": [],
+  "entry": "/",
+  "fingerprint": "ledger rows; answer column with ruled source rail",
+  "sections": [
+   "ask: answer + sources rail",
+   "library: add form + ledger"
+  ],
+  "signature": "the cited answer with sources ruled beside it as footnotes",
+  "waived": [],
+  "prompt": "a private inbox of saved notes and links that answers questions with cited sources",
+  "date": "2026-11-19"
+ }
+]

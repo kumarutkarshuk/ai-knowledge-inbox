@@ -65,13 +65,30 @@ For a local (non-Supabase) database, add `?sslmode=disable` to `DATABASE_URL`.
    - Schedule: every 10 minutes.
    - Save, then check the job history shows 200 responses.
 
+## System design
+
+| Decision                                                                                                                                                  | Trade-off                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Backend (Express + in-process cron worker) on Render, frontend on Vercel, cron-job.org pings `/health` every 10 min                                       | A free Render instance still cold-starts after a gap; the app shows a "waking up" hint                         |
+| One Postgres (Supabase + pgvector) is both the store and the job queue: items start SUBMITTED, the worker claims 3 a minute with `FOR UPDATE SKIP LOCKED` | No extra queue service, but saved items take up to a minute to become searchable                               |
+| Items table + separate chunks table with `vector(1024)` and an HNSW cosine index                                                                          | Changing the embedding model means a new column size and re-embedding everything                               |
+| Jina for embeddings and URL text; Groq `gpt-oss-120b` streams answers over SSE                                                                            | Depends on two external APIs and their free quotas                                                             |
+| Strict grounding: top 5 chunks with similarity >= 0.5 become numbered citations; no match returns "Not found" without calling the LLM                     | Never answers from general knowledge                                                                           |
+| Each question is answered alone; the chat lives only in the browser (last 100 turns)                                                                      | Follow-up questions that need earlier context do not work; chat is lost on another browser                     |
+| Dedupe by normalised URL or note hash; soft delete; re-saving restores the item                                                                           | Deleted chunks stay in the DB                                                                                  |
+| Up to 3 automatic retries, stuck jobs reset after 10 min, then FAILED                                                                                     | No manual retry button                                                                                         |
+| Single password + 7-day JWT in localStorage                                                                                                               | One user only; a stolen token works until it expires                                                           |
+| Plain SQL with `pg` over the session pooler; queries live in backend code; migrations run at startup                                                      | A bad migration blocks the boot; migrations are forward-only and must stay compatible with the previous deploy |
+| Saved content is treated as untrusted: chunks are wrapped as data in the prompt and answer images are never rendered                                      | Answers cannot show images                                                                                     |
+| Two independent projects (`frontend/`, `backend/`), no shared package                                                                                     | API types are copied by hand and must be kept in sync                                                          |
+
 ## Deployed checks
 
 Run these after both apps are deployed:
 
 1. `curl <render-url>/health` returns `{"status":"ok"}`.
-2. Open the Vercel URL, log in, save a note and a URL in Library, and wait until both are READY.
-3. Ask a question about the note. Source cards show first, then the answer streams in word by word (not all at once at the end) with `[n]` chips.
+2. Open the Vercel URL, log in, save a note and a URL in Library, and wait until both are Ready.
+3. Ask a question about the note. Sources show first, then the answer streams in word by word (not all at once at the end) with `[n]` chips.
 4. Browser dev tools -> Network: no CORS errors on `/login`, `/items` or `/query`.
 5. Ask something unrelated: "Not found in your saved items." and no Groq call in the Render logs.
 6. Cold start: if a request takes over 5s, the app shows "The server is waking up. This can take up to a minute."

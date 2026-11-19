@@ -1,5 +1,12 @@
-import { ArrowUp, Info, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ArrowUp, Info } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useOutletContext } from "react-router";
 import { ChatTurn } from "@/components/ChatTurn";
 import type { LayoutContext } from "@/components/Layout";
@@ -51,7 +58,9 @@ export function AskPage() {
 
   const query = input.trim();
   const busy = turns.some(isPending);
-  const setAnswering = useOutletContext<LayoutContext | undefined>()?.setAnswering;
+  const layout = useOutletContext<LayoutContext | undefined>();
+  const setAnswering = layout?.setAnswering;
+  const setClearChat = layout?.setClearChat;
   useEffect(() => {
     setAnswering?.(busy);
     return () => setAnswering?.(false);
@@ -81,12 +90,18 @@ export function AskPage() {
     }
   }
 
-  function clearChat() {
+  const clearChat = useCallback(() => {
     if (!window.confirm("Clear the whole chat?")) return;
     controller.current?.abort();
     setActive(null);
     setTurns([]);
-  }
+  }, []);
+
+  const hasTurns = turns.length > 0;
+  useEffect(() => {
+    setClearChat?.(hasTurns ? clearChat : null);
+    return () => setClearChat?.(null);
+  }, [hasTurns, clearChat, setClearChat]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,7 +126,7 @@ export function AskPage() {
   }
 
   const form = (
-    <form onSubmit={onSubmit} className="flex w-full flex-col gap-1">
+    <form onSubmit={onSubmit} className="flex w-full flex-col gap-2">
       <div className="relative">
         <Textarea
           aria-label="Question"
@@ -121,25 +136,25 @@ export function AskPage() {
           onKeyDown={onKeyDown}
           maxLength={QUERY_MAX_CHARS}
           rows={turns.length ? 1 : 3}
-          className="max-h-48 resize-none bg-background pr-12 shadow-sm"
+          className="max-h-48 resize-none py-3 pr-14 text-[1.0625rem]"
         />
         <Button
           type="submit"
           size="icon-sm"
           aria-label="Ask"
           disabled={!canAsk}
-          className="absolute right-2 bottom-2 rounded-full"
+          className="absolute right-2 bottom-2"
         >
           <ArrowUp />
         </Button>
       </div>
-      <div className="flex items-start gap-2 text-xs text-muted-foreground">
+      <div className="flex items-start gap-3 text-sm text-muted-foreground">
         <p role="note" className="flex flex-1 items-start gap-1">
-          <Info aria-hidden className="mt-px size-3.5 shrink-0" />
+          <Info aria-hidden className="mt-1 size-3.5 shrink-0" />
           {NO_HISTORY_WARNING}
         </p>
         {input.length > QUERY_MAX_CHARS * 0.9 && (
-          <span>
+          <span className="font-figure whitespace-nowrap tabular-nums">
             {input.length} / {QUERY_MAX_CHARS}
           </span>
         )}
@@ -149,23 +164,17 @@ export function AskPage() {
 
   if (turns.length === 0) {
     return (
-      <div className="flex min-h-[60svh] flex-col items-center justify-center gap-6">
-        <h1 className="text-3xl font-semibold">What do you want to know?</h1>
-        <div className="w-full max-w-2xl">{form}</div>
+      <div className="mx-auto flex min-h-[55svh] w-full max-w-2xl flex-col justify-center gap-6">
+        <h1 className="text-3xl">What do you want to know?</h1>
+        {form}
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-[calc(100svh-6rem)] flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-sm font-medium text-muted-foreground">Chat</h1>
-        <Button variant="ghost" size="sm" onClick={clearChat}>
-          <Trash2 />
-          Clear chat
-        </Button>
-      </div>
-      <div className="flex flex-1 flex-col gap-10">
+    <div className="flex min-h-[calc(100svh-9rem)] flex-col">
+      <h1 className="sr-only">Chat</h1>
+      <div className="flex flex-1 flex-col divide-y divide-hairline">
         {turns.map((turn) => (
           <ChatTurn
             key={turn.id}
@@ -175,7 +184,9 @@ export function AskPage() {
           />
         ))}
       </div>
-      <div className="sticky bottom-0 z-10 bg-background pt-2 pb-4">{form}</div>
+      <div className="sticky bottom-0 z-(--z-sticky) border-t border-hairline bg-background pt-4 pb-4">
+        {form}
+      </div>
     </div>
   );
 }

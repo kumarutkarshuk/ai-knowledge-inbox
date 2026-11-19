@@ -1,5 +1,4 @@
 import { FileText, Link as LinkIcon } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import type { Citation } from "@/types/api";
 
 interface Props {
@@ -11,38 +10,31 @@ interface Props {
 export function CitationCard({ id, citation, active }: Props) {
   const Icon = citation.type === "URL" ? LinkIcon : FileText;
   return (
-    <li id={id} className="scroll-mt-20">
-      <Card
-        size="sm"
+    <li id={id} className="min-w-0 scroll-mt-28 border-t border-hairline">
+      <div
         data-active={active || undefined}
-        className="h-full transition-shadow data-active:ring-2 data-active:ring-primary"
+        className="flex h-full flex-col gap-1 px-3 py-3 text-sm transition-[background-color] duration-(--dur-short) data-active:bg-brick/15 data-active:outline data-active:-outline-offset-1 data-active:outline-brick"
       >
-        <CardContent className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-              {citation.n}
-            </span>
-            <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate font-medium">{citation.title}</span>
-          </div>
-          {citation.sourceUrl && (
-            <a
-              href={citation.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="truncate text-xs text-muted-foreground underline-offset-4 hover:underline"
-            >
-              {citation.sourceUrl}
-            </a>
-          )}
-          <p className="line-clamp-3 text-xs break-words text-muted-foreground">
-            {citation.snippet}
-          </p>
-          <span className="text-xs text-muted-foreground">
-            {Math.round(citation.similarity * 100)}% match
-          </span>
-        </CardContent>
-      </Card>
+        <div className="flex items-baseline gap-2">
+          <span className="font-figure text-sm text-brick tabular-nums">{citation.n}</span>
+          <Icon aria-hidden className="size-3.5 shrink-0 self-center text-muted-foreground" />
+          <span className="truncate font-medium">{citation.title}</span>
+        </div>
+        {citation.sourceUrl && (
+          <a
+            href={citation.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="truncate text-brick underline decoration-1 underline-offset-[0.16em] hover:decoration-2"
+          >
+            {citation.sourceUrl}
+          </a>
+        )}
+        <p className="line-clamp-3 break-words text-muted-foreground">{citation.snippet}</p>
+        <span className="font-figure text-xs text-muted-foreground tabular-nums">
+          {Math.round(citation.similarity * 100)}% match
+        </span>
+      </div>
     </li>
   );
 }

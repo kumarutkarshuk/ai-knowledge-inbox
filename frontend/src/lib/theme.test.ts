@@ -7,8 +7,8 @@ afterEach(() => {
 });
 
 describe("theme", () => {
-  it("is dark by default", () => {
-    expect(getTheme()).toBe("dark");
+  it("is light by default", () => {
+    expect(getTheme()).toBe("light");
   });
 
   it("saves the choice and sets the dark class", () => {

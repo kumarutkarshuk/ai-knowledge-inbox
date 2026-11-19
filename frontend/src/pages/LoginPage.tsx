@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, apiJson } from "@/lib/apiClient";
@@ -43,37 +42,36 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <h1 className="text-2xl font-semibold">Login</h1>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                autoFocus
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                aria-invalid={error ? true : undefined}
-              />
-            </div>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <Button type="submit" disabled={pending}>
-              {pending ? "Logging in..." : "Login"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <main className="flex min-h-svh items-center justify-center px-4 py-10">
+      <div className="flex w-full max-w-sm flex-col">
+        <p className="rule-double pb-3 font-heading text-2xl leading-none font-bold tracking-[-0.02em]">
+          AI Knowledge Inbox
+        </p>
+        <h1 className="pt-8 pb-6 text-3xl">Login</h1>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={error ? true : undefined}
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={pending} className="mt-2 w-full">
+            {pending ? "Logging in..." : "Login"}
+          </Button>
+        </form>
+      </div>
     </main>
   );
 }

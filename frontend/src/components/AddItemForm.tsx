@@ -63,11 +63,18 @@ export function AddItemForm({ onSaved }: { onSaved: () => void }) {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <Tabs value={type} onValueChange={changeType}>
-        <TabsList>
-          <TabsTrigger value="NOTE">Note</TabsTrigger>
-          <TabsTrigger value="URL">URL</TabsTrigger>
+        <TabsList
+          variant="line"
+          className="h-10 w-full justify-start gap-6 border-b border-hairline p-0"
+        >
+          <TabsTrigger value="NOTE" className="h-full flex-none px-0">
+            Note
+          </TabsTrigger>
+          <TabsTrigger value="URL" className="h-full flex-none px-0">
+            URL
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="NOTE" className="flex flex-col gap-3 pt-2">
+        <TabsContent value="NOTE" className="flex flex-col gap-4 pt-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="note-title">Title (optional)</Label>
             <Input id="note-title" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -84,13 +91,16 @@ export function AddItemForm({ onSaved }: { onSaved: () => void }) {
             />
             <p
               id="note-count"
-              className={cn("text-xs text-muted-foreground", tooLong && "text-destructive")}
+              className={cn(
+                "font-figure text-xs text-muted-foreground tabular-nums",
+                tooLong && "text-destructive",
+              )}
             >
               {content.length.toLocaleString("en-US")} / {NOTE_MAX_CHARS.toLocaleString("en-US")}
             </p>
           </div>
         </TabsContent>
-        <TabsContent value="URL" className="flex flex-col gap-2 pt-2">
+        <TabsContent value="URL" className="flex flex-col gap-2 pt-4">
           <Label htmlFor="url">URL</Label>
           <Input
             id="url"

@@ -301,7 +301,7 @@ Pages:
   - a big centered question box; it moves to the bottom after the first question.
   - the answer streams in, rendered as markdown.
   - [n] markers become clickable chips that scroll to and highlight the citation card.
-  - citation cards (shown above the answer, before tokens arrive) show title, URL link (for URL items), snippet and similarity.
+  - citation cards (shown above the answer, before tokens arrive) show title, URL link (for URL items), snippet and similarity. They are ruled rows in a grid (1 column on phone, 2 from 640px, 3 from 1024px). The highlighted card gets a brick tint and a 1px brick outline (visible in both modes).
   - shows the not-found answer as a muted message.
   - one long chat: each question and its answer is a turn, added below the earlier ones.
   - auto scroll (`lib/useFollowScroll.ts`): while the answer streams, the page smoothly follows it to the bottom (at most once per animation frame). If the user scrolls up, it stops following; it follows again when the user scrolls back near the bottom (80px) or asks a new question.
@@ -321,14 +321,15 @@ Pages:
 - `/library`:
   - add form with tabs Note / URL. Note has an optional title and content with a live char count (max 50,000). URL has one input.
   - shows 409 "Already saved" and 400 validation messages.
-  - items list: type icon, title, URL link or note preview, status badge, error message (FAILED), created time.
+  - items list: ruled rows with type icon, title, URL link or note preview, status text (the enum shown in sentence case by CSS, e.g. "Ready"), error message (FAILED), created time (`formatDateTime` in `lib/format.ts`: short date and time, no seconds).
   - delete button only for READY and FAILED items, with a confirm dialog (`window.confirm`).
   - polls GET /items every 5s while any item is SUBMITTED or PROCESSING; stops otherwise. Only the latest GET /items response is applied.
 - Nav: top bar with Ask, Library, a theme toggle and Logout.
   - sticky at the top (always visible while scrolling).
   - Library is disabled (`aria-disabled`, no href) while an answer is being generated. AskPage tells Layout through the Outlet context (`setAnswering`).
-- Theme: dark by default, with a Sun/Moon toggle in the nav. The choice is saved in localStorage key `theme`. An inline script in `index.html` sets the `dark` class before React loads (no light flash). Code: `lib/theme.ts`, `components/ThemeToggle.tsx`.
+- Theme: light by default, with a Sun/Moon toggle in the nav. The choice is saved in localStorage key `theme`. An inline script in `index.html` sets the `dark` class before React loads when the saved choice is dark (no wrong-mode flash). Code: `lib/theme.ts`, `components/ThemeToggle.tsx`.
 - Server waking hint (TICKET-7): `apiFetch` wraps `fetch` in `trackSlow` (`lib/serverWaking.ts`). While any request has waited over 5s (`SLOW_REQUEST_MS`) for response headers, the root route (`components/Root.tsx`) shows "The server may be waking up. This can take up to a minute." on every page, login included. A long SSE stream does not count, only the wait for headers.
+- Visual design (Hallmark, Newsprint theme): tokens in `src/tokens.css` (light in `:root`, dark in `.dark`), base rules in `src/base.css` (imported into the `base` layer), shadcn variables mapped to the tokens in `src/index.css`. Fonts: Zilla Slab 700, Spectral 400/500, Libre Franklin 500 via `@fontsource`. Radius 0, no shadows. Tailwind colors added: `well`, `hairline`, `rule-strong`, `brick`; font `figure`; utilities `rule-double`, `sentence-case`. Hallmark tokens `--color-accent`/`--color-muted` are renamed `--color-signal`/`--color-ink-3` to avoid clashing with shadcn names.
 - Vercel Analytics component added at the root.
 - Env: VITE_API_URL.
 
