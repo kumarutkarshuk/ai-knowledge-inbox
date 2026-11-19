@@ -52,9 +52,27 @@ For a local (non-Supabase) database, add `?sslmode=disable` to `DATABASE_URL`.
 3. Render (backend)
    - New -> Blueprint -> pick this repo; it reads `render.yaml` (root dir `backend`, health check `/health`).
    - Set `FRONTEND_ORIGIN`, `DATABASE_URL`, `GROQ_API_KEY`, `JINA_API_KEY`, `APP_PASSWORD`. `TOKEN_SECRET` is generated; `PORT` is set by Render.
+   - The Vercel URL is not known yet, so set `FRONTEND_ORIGIN` to a placeholder URL first (for example `https://example.com`). The backend exits at startup if it is empty.
 4. Vercel (frontend)
    - New project from this repo with root directory `frontend`.
    - Install `bun install`, build `bun run build`, output `dist` (already set in `frontend/vercel.json`, which also rewrites all routes to `index.html`).
-   - Set `VITE_API_URL` to the Render URL.
+   - Set `VITE_API_URL` to the Render URL. It is fixed at build time, so redeploy the frontend after changing it.
    - Enable Analytics.
-5. cron-job.org: create a job that sends GET `<render-url>/health` every 10 minutes.
+5. Set `FRONTEND_ORIGIN` on Render to the Vercel URL (for example `https://my-app.vercel.app`, no path). Redeploy the backend after changing it.
+6. cron-job.org (keeps the free Render service awake)
+   - Sign up at https://cron-job.org and click Create cronjob.
+   - URL: `<render-url>/health`, method GET.
+   - Schedule: every 10 minutes.
+   - Save, then check the job history shows 200 responses.
+
+## Deployed checks
+
+Run these after both apps are deployed:
+
+1. `curl <render-url>/health` returns `{"status":"ok"}`.
+2. Open the Vercel URL, log in, save a note and a URL in Library, and wait until both are READY.
+3. Ask a question about the note. Source cards show first, then the answer streams in word by word (not all at once at the end) with `[n]` chips.
+4. Browser dev tools -> Network: no CORS errors on `/login`, `/items` or `/query`.
+5. Ask something unrelated: "Not found in your saved items." and no Groq call in the Render logs.
+6. Cold start: if a request takes over 5s, the app shows "The server is waking up. This can take up to a minute."
+7. Pinger: the Render logs show a `/health` hit every 10 minutes and no spin-down over 1 hour.

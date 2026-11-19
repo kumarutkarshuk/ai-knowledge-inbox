@@ -1,5 +1,7 @@
+import express from "express";
+import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { formatSse } from "./sse.js";
+import { formatSse, openSse } from "./sse.js";
 
 describe("formatSse", () => {
   it("writes the event name and JSON data, ended by a blank line", () => {
@@ -13,5 +15,19 @@ describe("formatSse", () => {
     expect(formatSse({ event: "token", data: { text: "a\n\nb" } })).toBe(
       'event: token\ndata: {"text":"a\\n\\nb"}\n\n',
     );
+  });
+});
+
+describe("openSse", () => {
+  it("sends the no-buffering SSE headers", async () => {
+    const app = express().get("/", (_req, res) => {
+      openSse(res);
+      res.end();
+    });
+    const res = await request(app).get("/");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/event-stream/);
+    expect(res.headers["cache-control"]).toBe("no-cache");
+    expect(res.headers["x-accel-buffering"]).toBe("no");
   });
 });
