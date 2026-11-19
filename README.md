@@ -65,25 +65,22 @@ For a local (non-Supabase) database, add `?sslmode=disable` to `DATABASE_URL`.
    - Schedule: every 10 minutes.
    - Save, then check the job history shows 200 responses.
 
-## Design
+## System design
 
-The UI was redesigned with the [Hallmark](https://github.com/Nutlope/hallmark) skill (installed at project scope in `.claude/skills/hallmark`). Theme: Newsprint.
-
-Decisions:
-
-- Newspaper look: Zilla Slab heads, Spectral body, Libre Franklin for figures (dates, counts, match %). Fonts are self-hosted with `@fontsource`.
-- Rules, not boxes: square corners, no shadows, hairlines between rows and a double rule under the nav.
-- One brick accent, only for links, the current tab or nav item, citation numbers and the focus ring. Buttons are ink-filled.
-- Ask: the answer reads in a 65ch column; its sources sit beside it as a ruled list (stacked above the answer under 1024px).
-- Library: items are ruled rows (a ledger) instead of cards; status is plain text, not a caps badge.
-- Light and dark modes share one token set (`frontend/src/tokens.css`); shadcn variables point at these tokens in `frontend/src/index.css`.
-
-Trade-offs:
-
-- Serif text is less dense than a sans UI, so lists show fewer items per screen.
-- Three font families add about 100 KB of font files on first load.
-- shadcn components were restyled in place (`components/ui/`), so pulling a newer shadcn version means re-applying the changes.
-- The look is opinionated; a new theme means new tokens, not a class swap.
+| Decision                                                                                                                                                  | Trade-off                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Backend (Express + in-process cron worker) on Render, frontend on Vercel, cron-job.org pings `/health` every 10 min                                       | A free Render instance still cold-starts after a gap; the app shows a "waking up" hint                         |
+| One Postgres (Supabase + pgvector) is both the store and the job queue: items start SUBMITTED, the worker claims 3 a minute with `FOR UPDATE SKIP LOCKED` | No extra queue service, but saved items take up to a minute to become searchable                               |
+| Items table + separate chunks table with `vector(1024)` and an HNSW cosine index                                                                          | Changing the embedding model means a new column size and re-embedding everything                               |
+| Jina for embeddings and URL text; Groq `gpt-oss-120b` streams answers over SSE                                                                            | Depends on two external APIs and their free quotas                                                             |
+| Strict grounding: top 5 chunks with similarity >= 0.5 become numbered citations; no match returns "Not found" without calling the LLM                     | Never answers from general knowledge                                                                           |
+| Each question is answered alone; the chat lives only in the browser (last 100 turns)                                                                      | Follow-up questions that need earlier context do not work; chat is lost on another browser                     |
+| Dedupe by normalised URL or note hash; soft delete; re-saving restores the item                                                                           | Deleted chunks stay in the DB                                                                                  |
+| Up to 3 automatic retries, stuck jobs reset after 10 min, then FAILED                                                                                     | No manual retry button                                                                                         |
+| Single password + 7-day JWT in localStorage                                                                                                               | One user only; a stolen token works until it expires                                                           |
+| Plain SQL with `pg` over the session pooler; queries live in backend code; migrations run at startup                                                      | A bad migration blocks the boot; migrations are forward-only and must stay compatible with the previous deploy |
+| Saved content is treated as untrusted: chunks are wrapped as data in the prompt and answer images are never rendered                                      | Answers cannot show images                                                                                     |
+| Two independent projects (`frontend/`, `backend/`), no shared package                                                                                     | API types are copied by hand and must be kept in sync                                                          |
 
 ## Deployed checks
 
