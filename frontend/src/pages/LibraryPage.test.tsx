@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loginRedirect } from "@/lib/apiClient";
 import { getToken, setToken } from "@/lib/auth";
 import { routes } from "@/routes";
+import { formatDateTime } from "@/lib/format";
 import type { Item } from "@/types/api";
 
 const future = new Date(Date.now() + 60_000).toISOString();
@@ -88,7 +89,7 @@ describe("LibraryPage list", () => {
     expect(n.getByText("Note A")).toBeInTheDocument();
     expect(n.getByText("note preview")).toBeInTheDocument();
     expect(n.getByText("READY")).toBeInTheDocument();
-    expect(n.getByText(new Date("2026-11-18T10:00:00.000Z").toLocaleString())).toBeInTheDocument();
+    expect(n.getByText(formatDateTime("2026-11-18T10:00:00.000Z"))).toBeInTheDocument();
 
     const u = within(url as HTMLElement);
     expect(u.getByLabelText("URL")).toBeInTheDocument();

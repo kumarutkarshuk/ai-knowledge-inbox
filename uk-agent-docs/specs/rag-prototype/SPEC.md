@@ -321,7 +321,7 @@ Pages:
 - `/library`:
   - add form with tabs Note / URL. Note has an optional title and content with a live char count (max 50,000). URL has one input.
   - shows 409 "Already saved" and 400 validation messages.
-  - items list: ruled rows with type icon, title, URL link or note preview, status text (the enum shown in sentence case by CSS, e.g. "Ready"), error message (FAILED), created time.
+  - items list: ruled rows with type icon, title, URL link or note preview, status text (the enum shown in sentence case by CSS, e.g. "Ready"), error message (FAILED), created time (`formatDateTime` in `lib/format.ts`: short date and time, no seconds).
   - delete button only for READY and FAILED items, with a confirm dialog (`window.confirm`).
   - polls GET /items every 5s while any item is SUBMITTED or PROCESSING; stops otherwise. Only the latest GET /items response is applied.
 - Nav: top bar with Ask, Library, a theme toggle and Logout.

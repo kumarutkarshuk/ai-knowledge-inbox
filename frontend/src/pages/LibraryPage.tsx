@@ -4,6 +4,7 @@ import { AddItemForm } from "@/components/AddItemForm";
 import { Button } from "@/components/ui/button";
 import { ITEMS_POLL_MS } from "@/constants";
 import { ApiError, apiFetch, apiJson } from "@/lib/apiClient";
+import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Item, ItemsResponse, ItemStatus } from "@/types/api";
 
@@ -68,7 +69,7 @@ function ItemRow({ item, onDelete }: { item: Item; onDelete: (item: Item) => voi
           dateTime={item.createdAt}
           className="font-figure text-xs whitespace-nowrap text-muted-foreground tabular-nums"
         >
-          {new Date(item.createdAt).toLocaleString()}
+          {formatDateTime(item.createdAt)}
         </time>
       </div>
       {!isBusy(item) && (
