@@ -1,5 +1,12 @@
-import { ArrowUp, Info, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ArrowUp, Info } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useOutletContext } from "react-router";
 import { ChatTurn } from "@/components/ChatTurn";
 import type { LayoutContext } from "@/components/Layout";
@@ -51,7 +58,9 @@ export function AskPage() {
 
   const query = input.trim();
   const busy = turns.some(isPending);
-  const setAnswering = useOutletContext<LayoutContext | undefined>()?.setAnswering;
+  const layout = useOutletContext<LayoutContext | undefined>();
+  const setAnswering = layout?.setAnswering;
+  const setClearChat = layout?.setClearChat;
   useEffect(() => {
     setAnswering?.(busy);
     return () => setAnswering?.(false);
@@ -81,12 +90,18 @@ export function AskPage() {
     }
   }
 
-  function clearChat() {
+  const clearChat = useCallback(() => {
     if (!window.confirm("Clear the whole chat?")) return;
     controller.current?.abort();
     setActive(null);
     setTurns([]);
-  }
+  }, []);
+
+  const hasTurns = turns.length > 0;
+  useEffect(() => {
+    setClearChat?.(hasTurns ? clearChat : null);
+    return () => setClearChat?.(null);
+  }, [hasTurns, clearChat, setClearChat]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -158,15 +173,7 @@ export function AskPage() {
 
   return (
     <div className="flex min-h-[calc(100svh-9rem)] flex-col">
-      <div className="flex items-center justify-between border-b border-hairline pb-3">
-        <h1 className="font-sans text-sm font-medium tracking-normal text-muted-foreground">
-          Chat
-        </h1>
-        <Button variant="ghost" size="sm" onClick={clearChat}>
-          <Trash2 />
-          Clear chat
-        </Button>
-      </div>
+      <h1 className="sr-only">Chat</h1>
       <div className="flex flex-1 flex-col divide-y divide-hairline">
         {turns.map((turn) => (
           <ChatTurn

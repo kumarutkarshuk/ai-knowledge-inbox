@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -7,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export interface LayoutContext {
   setAnswering: (answering: boolean) => void;
+  setClearChat: (clear: (() => void) | null) => void;
 }
 
 const links = [
@@ -20,6 +22,11 @@ const linkClass =
 export function Layout() {
   const navigate = useNavigate();
   const [answering, setAnswering] = useState(false);
+  const [clearChat, setClearChatState] = useState<(() => void) | null>(null);
+  const [context] = useState<LayoutContext>(() => ({
+    setAnswering,
+    setClearChat: (clear) => setClearChatState(() => clear),
+  }));
 
   function logout() {
     clearToken();
@@ -66,6 +73,12 @@ export function Layout() {
             )}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            {clearChat && (
+              <Button variant="ghost" size="sm" aria-label="Clear chat" onClick={clearChat}>
+                <Trash2 />
+                <span className="hidden sm:inline">Clear chat</span>
+              </Button>
+            )}
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout}>
               Logout
@@ -74,7 +87,7 @@ export function Layout() {
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-        <Outlet context={{ setAnswering } satisfies LayoutContext} />
+        <Outlet context={context} />
       </main>
     </div>
   );

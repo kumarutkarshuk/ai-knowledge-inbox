@@ -488,6 +488,23 @@ describe("AskPage", () => {
     expect(localStorage.getItem("chat")).toBeNull();
   });
 
+  it("shows Clear chat in the nav only on Ask with a chat", async () => {
+    fetchMock.mockResolvedValueOnce(
+      streamResponse([sse("citations", []), sse("token", { text: "A" }), sse("done", {})]),
+    );
+    renderAsk();
+    expect(screen.queryByRole("button", { name: "Clear chat" })).toBeNull();
+    await ask("q");
+    await screen.findByText("A");
+    const nav = screen.getByRole("banner");
+    expect(within(nav).getByRole("button", { name: "Clear chat" })).toBeInTheDocument();
+
+    fetchMock.mockResolvedValueOnce(Response.json({ items: [] }));
+    await userEvent.click(screen.getByRole("link", { name: "Library" }));
+    await screen.findByRole("heading", { name: "Library" });
+    expect(screen.queryByRole("button", { name: "Clear chat" })).toBeNull();
+  });
+
   it("does not send a question longer than 1000 chars", async () => {
     renderAsk();
     const box = screen.getByRole("textbox", { name: "Question" });

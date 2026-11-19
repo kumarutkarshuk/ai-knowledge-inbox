@@ -58,15 +58,15 @@ describe("routes", () => {
     expect(router.state.location.pathname).toBe("/");
   });
 
-  it("starts in dark mode and switches theme from the nav", async () => {
+  it("starts in light mode and switches theme from the nav", async () => {
     const user = userEvent.setup();
     renderAt("/");
-    await user.click(screen.getByRole("button", { name: "Switch to light mode" }));
-    expect(document.documentElement).not.toHaveClass("dark");
-    expect(localStorage.getItem("theme")).toBe("light");
     await user.click(screen.getByRole("button", { name: "Switch to dark mode" }));
     expect(document.documentElement).toHaveClass("dark");
     expect(localStorage.getItem("theme")).toBe("dark");
+    await user.click(screen.getByRole("button", { name: "Switch to light mode" }));
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(localStorage.getItem("theme")).toBe("light");
   });
 
   it("keeps the nav bar sticky at the top", () => {
