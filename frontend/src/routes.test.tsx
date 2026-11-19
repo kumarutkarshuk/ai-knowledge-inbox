@@ -41,7 +41,7 @@ describe("routes", () => {
     renderAt("/");
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
-    expect(screen.getByRole("heading", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What do you want to know?" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("aria-current", "page");
   });
 
@@ -56,6 +56,22 @@ describe("routes", () => {
 
     await user.click(screen.getByRole("link", { name: "Ask" }));
     expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("starts in dark mode and switches theme from the nav", async () => {
+    const user = userEvent.setup();
+    renderAt("/");
+    await user.click(screen.getByRole("button", { name: "Switch to light mode" }));
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(localStorage.getItem("theme")).toBe("light");
+    await user.click(screen.getByRole("button", { name: "Switch to dark mode" }));
+    expect(document.documentElement).toHaveClass("dark");
+    expect(localStorage.getItem("theme")).toBe("dark");
+  });
+
+  it("keeps the nav bar sticky at the top", () => {
+    renderAt("/");
+    expect(nav()?.closest("header")).toHaveClass("sticky", "top-0");
   });
 
   it("renders /login without the nav", () => {

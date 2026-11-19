@@ -42,7 +42,9 @@ describe("LoginPage", () => {
     );
     const router = renderLogin();
     await submit("secret");
-    expect(await screen.findByRole("heading", { name: "Ask" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "What do you want to know?" }),
+    ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/");
     expect(getToken()).toBe("tok");
     expect(JSON.parse(localStorage.getItem("session") ?? "")).toEqual({
