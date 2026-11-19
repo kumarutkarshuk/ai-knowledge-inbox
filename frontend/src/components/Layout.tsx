@@ -14,7 +14,8 @@ const links = [
   { to: "/library", label: "Library", blockWhileAnswering: true },
 ];
 
-const linkClass = "text-muted-foreground hover:text-foreground";
+const linkClass =
+  "relative flex h-full items-center font-medium whitespace-nowrap text-muted-foreground transition-[color] duration-(--dur-micro) after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-transparent hover:text-foreground";
 
 export function Layout() {
   const navigate = useNavigate();
@@ -27,10 +28,15 @@ export function Layout() {
 
   return (
     <div className="min-h-svh">
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-4xl items-center gap-6 px-4">
-          <span className="font-semibold">AI Knowledge Inbox</span>
-          <nav aria-label="Main" className="flex gap-4 text-sm">
+      <header className="rule-double sticky top-0 z-(--z-sticky-nav) bg-background">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-8 px-4 sm:h-16 sm:flex-nowrap sm:px-6">
+          <span className="flex h-14 items-center font-heading text-lg leading-none font-bold tracking-[-0.02em] whitespace-nowrap sm:h-auto sm:text-xl">
+            AI Knowledge Inbox
+          </span>
+          <nav
+            aria-label="Main"
+            className="order-last flex h-11 w-full gap-5 sm:order-none sm:h-full sm:w-auto"
+          >
             {links.map((link) =>
               answering && link.blockWhileAnswering ? (
                 <span
@@ -40,7 +46,7 @@ export function Layout() {
                   title="Wait for the answer to finish"
                   className={cn(
                     linkClass,
-                    "cursor-not-allowed opacity-50 hover:text-muted-foreground",
+                    "cursor-not-allowed opacity-55 hover:text-muted-foreground",
                   )}
                 >
                   {link.label}
@@ -51,7 +57,7 @@ export function Layout() {
                   to={link.to}
                   end
                   className={({ isActive }) =>
-                    cn(linkClass, isActive && "font-medium text-foreground")
+                    cn(linkClass, isActive && "text-foreground after:bg-brick")
                   }
                 >
                   {link.label}
@@ -59,7 +65,7 @@ export function Layout() {
               ),
             )}
           </nav>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout}>
               Logout
@@ -67,7 +73,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl p-4">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         <Outlet context={{ setAnswering } satisfies LayoutContext} />
       </main>
     </div>

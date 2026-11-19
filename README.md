@@ -65,13 +65,33 @@ For a local (non-Supabase) database, add `?sslmode=disable` to `DATABASE_URL`.
    - Schedule: every 10 minutes.
    - Save, then check the job history shows 200 responses.
 
+## Design
+
+The UI was redesigned with the [Hallmark](https://github.com/Nutlope/hallmark) skill (installed at project scope in `.claude/skills/hallmark`). Theme: Newsprint.
+
+Decisions:
+
+- Newspaper look: Zilla Slab heads, Spectral body, Libre Franklin for figures (dates, counts, match %). Fonts are self-hosted with `@fontsource`.
+- Rules, not boxes: square corners, no shadows, hairlines between rows and a double rule under the nav.
+- One brick accent, only for links, the current tab or nav item, citation numbers and the focus ring. Buttons are ink-filled.
+- Ask: the answer reads in a 65ch column; its sources sit beside it as a ruled list (stacked above the answer under 1024px).
+- Library: items are ruled rows (a ledger) instead of cards; status is plain text, not a caps badge.
+- Light and dark modes share one token set (`frontend/src/tokens.css`); shadcn variables point at these tokens in `frontend/src/index.css`.
+
+Trade-offs:
+
+- Serif text is less dense than a sans UI, so lists show fewer items per screen.
+- Three font families add about 100 KB of font files on first load.
+- shadcn components were restyled in place (`components/ui/`), so pulling a newer shadcn version means re-applying the changes.
+- The look is opinionated; a new theme means new tokens, not a class swap.
+
 ## Deployed checks
 
 Run these after both apps are deployed:
 
 1. `curl <render-url>/health` returns `{"status":"ok"}`.
-2. Open the Vercel URL, log in, save a note and a URL in Library, and wait until both are READY.
-3. Ask a question about the note. Source cards show first, then the answer streams in word by word (not all at once at the end) with `[n]` chips.
+2. Open the Vercel URL, log in, save a note and a URL in Library, and wait until both are Ready.
+3. Ask a question about the note. Sources show first, then the answer streams in word by word (not all at once at the end) with `[n]` chips.
 4. Browser dev tools -> Network: no CORS errors on `/login`, `/items` or `/query`.
 5. Ask something unrelated: "Not found in your saved items." and no Groq call in the Render logs.
 6. Cold start: if a request takes over 5s, the app shows "The server is waking up. This can take up to a minute."
