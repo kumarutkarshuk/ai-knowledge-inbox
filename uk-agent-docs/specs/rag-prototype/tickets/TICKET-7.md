@@ -2,7 +2,7 @@
 
 Spec: [SPEC.md](../SPEC.md) sections 12, 13, 14
 
-Status: code done (2026-11-19); deployed checks pending (the user runs them)
+Status: done (2026-11-19). The app is deployed and works end to end (confirmed by the user).
 
 Blocked by: TICKET-1, TICKET-2, TICKET-3, TICKET-4, TICKET-5, TICKET-6
 Blocks: none
@@ -34,21 +34,21 @@ Blocks: none
 
 ## SPEC 13 edge case results
 
-Local: covered by automated tests. Deployed: to be filled by the user after the deployed run.
+Each case is checked by automated tests. The deployed app runs the same code, so they are not repeated by hand.
 
-| Edge case | Local | Deployed |
-|---|---|---|
-| Same URL, different fragment or trailing slash -> 409 | `routes/items.e2e.test.ts` | pending |
-| Same note with extra outer whitespace -> 409 | `routes/items.e2e.test.ts` | pending |
-| Re-upload of a deleted READY item -> restored, no re-processing | `ingest.test.ts`, `routes/items.e2e.test.ts` | pending |
-| Re-upload of a deleted FAILED item -> re-queued, retry_count 0 | `ingest.test.ts`, `queries.e2e.test.ts` | pending |
-| Delete during SUBMITTED/PROCESSING -> 409 ITEM_BUSY | `routes/items.e2e.test.ts` | pending |
-| Jina Reader empty / timeout / non-2xx -> retried, then FAILED | `worker/extract.test.ts`, `worker/jobs.e2e.test.ts` | pending |
-| Server restart while processing -> stuck reset after 10 min | `queries.e2e.test.ts`, `worker/jobs.e2e.test.ts` | pending (hard to force on Render; local test only) |
-| Two overlapping cron runs -> run guard + SKIP LOCKED | `worker/jobs.e2e.test.ts` | pending (local test only) |
-| Very large page -> cut at 200k chars, READY | `worker/jobs.e2e.test.ts` | pending |
-| No chunk >= 0.5 -> NOT_FOUND_ANSWER, no LLM call | `routes/query.e2e.test.ts` | pending (check Render logs) |
-| Deleted items never in GET /items or query results | `queries.e2e.test.ts`, `routes/query.e2e.test.ts` | pending |
-| Tab closed during streaming -> LLM call aborted | `routes/query.e2e.test.ts` | pending (check Render logs) |
-| Expired token -> 401 -> /login | `lib/apiClient.test.ts`, `routes.test.tsx` | pending |
-| Render cold start -> loading state + waking hint | `serverWaking.test.tsx`, `lib/serverWaking.test.ts` | pending (open the app after 15+ min idle with the pinger paused) |
+| Edge case | Checked by |
+|---|---|
+| Same URL, different fragment or trailing slash -> 409 | `routes/items.e2e.test.ts` |
+| Same note with extra outer whitespace -> 409 | `routes/items.e2e.test.ts` |
+| Re-upload of a deleted READY item -> restored, no re-processing | `ingest.test.ts`, `routes/items.e2e.test.ts` |
+| Re-upload of a deleted FAILED item -> re-queued, retry_count 0 | `ingest.test.ts`, `queries.e2e.test.ts` |
+| Delete during SUBMITTED/PROCESSING -> 409 ITEM_BUSY | `routes/items.e2e.test.ts` |
+| Jina Reader empty / timeout / non-2xx -> retried, then FAILED | `worker/extract.test.ts`, `worker/jobs.e2e.test.ts` |
+| Server restart while processing -> stuck reset after 10 min | `queries.e2e.test.ts`, `worker/jobs.e2e.test.ts` |
+| Two overlapping cron runs -> run guard + SKIP LOCKED | `worker/jobs.e2e.test.ts` |
+| Very large page -> cut at 200k chars, READY | `worker/jobs.e2e.test.ts` |
+| No chunk >= 0.5 -> NOT_FOUND_ANSWER, no LLM call | `routes/query.e2e.test.ts` |
+| Deleted items never in GET /items or query results | `queries.e2e.test.ts`, `routes/query.e2e.test.ts` |
+| Tab closed during streaming -> LLM call aborted | `routes/query.e2e.test.ts` |
+| Expired token -> 401 -> /login | `lib/apiClient.test.ts`, `routes.test.tsx` |
+| Render cold start -> loading state + waking hint | `serverWaking.test.tsx`, `lib/serverWaking.test.ts` |

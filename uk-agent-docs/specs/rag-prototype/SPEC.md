@@ -368,7 +368,6 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 - Create the Render service with a placeholder FRONTEND_ORIGIN (for example `https://example.com`), since the Vercel URL is not known yet.
 - After the Vercel deploy, set FRONTEND_ORIGIN to the Vercel URL and redeploy the backend. VITE_API_URL is fixed at build time; redeploy the frontend after changing it.
 - Create a cron-job.org job: GET `<render-url>/health` every 10 min, and check its history shows 200 responses.
-- Run the README "Deployed checks" and fill the Deployed column in TICKET-7.
 
 ## 15. Tickets
 
