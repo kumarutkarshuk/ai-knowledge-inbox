@@ -36,6 +36,20 @@ describe("CORS", () => {
     expect(res.status).toBe(204);
     expect(res.headers["access-control-allow-origin"]).toBe(origin);
   });
+
+  it("allows the auth and JSON headers for POST /query from the frontend", async () => {
+    const res = await request(app)
+      .options("/query")
+      .set("Origin", origin)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "authorization,content-type");
+    expect(res.status).toBe(204);
+    expect(res.headers["access-control-allow-origin"]).toBe(origin);
+    expect(res.headers["access-control-allow-methods"]).toContain("POST");
+    const allowed = res.headers["access-control-allow-headers"]?.toLowerCase() ?? "";
+    expect(allowed).toContain("authorization");
+    expect(allowed).toContain("content-type");
+  });
 });
 
 describe("error shape", () => {

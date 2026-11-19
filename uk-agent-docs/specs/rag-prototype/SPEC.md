@@ -73,7 +73,7 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 
 ## 6. Constants
 
-All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` copies only NOTE_MAX_CHARS, QUERY_MAX_CHARS, ITEMS_POLL_MS and NOT_FOUND_ANSWER, plus the UI-only CHAT_MAX_TURNS (100, the most turns kept in localStorage; older ones are dropped).
+All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` copies only NOTE_MAX_CHARS, QUERY_MAX_CHARS, ITEMS_POLL_MS and NOT_FOUND_ANSWER, plus the UI-only CHAT_MAX_TURNS (100, the most turns kept in localStorage; older ones are dropped), SLOW_REQUEST_MS (5000) and SERVER_WAKING_HINT.
 
 | Name | Value |
 |---|---|
@@ -328,6 +328,7 @@ Pages:
   - sticky at the top (always visible while scrolling).
   - Library is disabled (`aria-disabled`, no href) while an answer is being generated. AskPage tells Layout through the Outlet context (`setAnswering`).
 - Theme: dark by default, with a Sun/Moon toggle in the nav. The choice is saved in localStorage key `theme`. An inline script in `index.html` sets the `dark` class before React loads (no light flash). Code: `lib/theme.ts`, `components/ThemeToggle.tsx`.
+- Server waking hint (TICKET-7): `apiFetch` wraps `fetch` in `trackSlow` (`lib/serverWaking.ts`). While any request has waited over 5s (`SLOW_REQUEST_MS`) for response headers, the root route (`components/Root.tsx`) shows "The server may be waking up. This can take up to a minute." on every page, login included. A long SSE stream does not count, only the wait for headers.
 - Vercel Analytics component added at the root.
 - Env: VITE_API_URL.
 
@@ -356,7 +357,7 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 - Deleted items never show up in GET /items or in query results.
 - Client closes the tab during streaming -> LLM call aborted.
 - Expired token -> 401 -> frontend goes to /login.
-- Render cold start (if the pinger misses) -> the frontend shows a loading state; requests may take ~1 min.
+- Render cold start (if the pinger misses) -> the frontend shows a loading state, and the "server waking up" hint after 5s; requests may take ~1 min.
 
 ## 14. Manual setup by the user
 
@@ -364,7 +365,10 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 - Get Groq and Jina API keys.
 - Create a Render web service from render.yaml (root dir `backend`) and set the env vars.
 - Create a Vercel project (root dir `frontend`), set VITE_API_URL, enable Analytics.
-- Create a cron-job.org job: GET `<render-url>/health` every 10 min.
+- Create the Render service with a placeholder FRONTEND_ORIGIN (for example `https://example.com`), since the Vercel URL is not known yet.
+- After the Vercel deploy, set FRONTEND_ORIGIN to the Vercel URL and redeploy the backend. VITE_API_URL is fixed at build time; redeploy the frontend after changing it.
+- Create a cron-job.org job: GET `<render-url>/health` every 10 min, and check its history shows 200 responses.
+- Run the README "Deployed checks" and fill the Deployed column in TICKET-7.
 
 ## 15. Tickets
 

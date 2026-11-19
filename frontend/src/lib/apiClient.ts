@@ -1,5 +1,6 @@
 import { API_URL } from "@/config";
 import { clearToken, getToken } from "@/lib/auth";
+import { trackSlow } from "@/lib/serverWaking";
 import type { ErrorResponse } from "@/types/api";
 
 export class ApiError extends Error {
@@ -39,7 +40,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const res = await trackSlow(fetch(`${API_URL}${path}`, { ...init, headers }));
   if (res.ok) return res;
   if (res.status === 401 && token) {
     clearToken();
