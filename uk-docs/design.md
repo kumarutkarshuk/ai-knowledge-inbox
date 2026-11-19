@@ -49,4 +49,5 @@
     - URLs are of only text-based web pages
     - no chat history fed back to LLM
     - chat history is not stored
+    - only http or https URLs
 

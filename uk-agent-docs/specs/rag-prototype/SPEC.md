@@ -262,7 +262,7 @@ Each run:
 4. On error for a job: retry_count + 1; error_message = error text plus its cause (e.g. `fetch failed: getaddrinfo ENOTFOUND x`), max 200 chars; status SUBMITTED if retry_count <= 3, else FAILED.
 5. One failing job must not stop the other jobs in the same run.
 6. Logs: one JSON line per job (`event: worker.job`, id, type, result READY / RETRY / FAILED / SKIPPED, chunks or error, durationMs), one per stuck reset (`worker.stuck`), and `worker.run` with ERROR if the run itself fails.
-7. On SIGTERM/SIGINT (handled once; repeated signals are ignored) the cron stops and the worker aborts its Jina calls. The running job and any other claimed jobs go back to SUBMITTED with no retry counted (`releaseJob`, log result RELEASED), then the pool closes. This takes milliseconds, so it finishes before a watcher's force kill (`tsx watch` SIGKILLs on the second SIGINT, and `bun run dev` relays Ctrl+C as a second one). If the process is killed anyway, the stuck reset brings the job back after 10 min.
+7. On SIGTERM/SIGINT (handled once; repeated signals are ignored) the cron stops and the worker aborts its Jina calls. The running job and any other claimed jobs go back to SUBMITTED with no retry counted (`releaseJob`, log result RELEASED), then the pool closes. With a remote DB this takes a few hundred ms. The dev script uses `node --watch --import tsx` (not `tsx watch`): under `bun run dev` a Ctrl+C reaches `tsx watch` twice and it SIGKILLs the backend at once, before the release can finish. `node --watch` sends SIGTERM and waits for the exit. On Render, SIGTERM goes straight to `node dist/index.js`. If the process is killed anyway, the stuck reset brings the job back after 10 min.
 
 ## 10. Auth
 
