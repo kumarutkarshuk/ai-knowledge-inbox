@@ -2,6 +2,8 @@
 
 Spec: [SPEC.md](../SPEC.md) sections 8 (POST /query), 11 (/), 13
 
+Status: done (2026-11-19)
+
 Blocked by: TICKET-1, TICKET-2, TICKET-3, TICKET-5
 Blocks: TICKET-7
 
@@ -15,7 +17,7 @@ Backend:
   - no rows: `citations []` -> `token` NOT_FOUND_ANSWER -> `done`, with no LLM call.
   - else: `citations` (n, itemId, type, title, sourceUrl, 300-char snippet, similarity) -> stream ChatGroq (`llama-3.3-70b-versatile`, temperature 0.2) tokens as `token` events -> `done`.
   - prompt template with numbered context chunks and the SPEC 8 rules.
-  - AbortController tied to `req.on('close')`.
+  - AbortController tied to `res.on('close')` (not `req.on('close')`, which fires once the body is read in Node >= 16).
   - errors after the stream starts -> `error` event, then end.
 - SSE event writer helper using the SSE event types from `backend/src/types/api.ts`. If they change, update the copy in `frontend/src/types/api.ts` too.
 

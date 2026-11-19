@@ -41,7 +41,7 @@ describe("routes", () => {
     renderAt("/");
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
-    expect(screen.getByRole("heading", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What do you want to know?" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("aria-current", "page");
   });
 
