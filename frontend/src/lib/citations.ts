@@ -1,6 +1,6 @@
 import type { Link, Nodes, PhrasingContent, Root } from "mdast";
 
-const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+const MARKER = /[[【](\d+(?:\s*[,，]\s*\d+)*)(?:†[^\]】]*)?[\]】]/g;
 const CITE_HREF = /^#cite-(\d+)$/;
 
 function citeLink(n: number): Link {
@@ -11,7 +11,7 @@ export function splitCitations(text: string, count: number): PhrasingContent[] {
   const nodes: PhrasingContent[] = [];
   let last = 0;
   for (const match of text.matchAll(MARKER)) {
-    const numbers = (match[1] ?? "").split(",").map((n) => Number(n.trim()));
+    const numbers = (match[1] ?? "").split(/[,，]/).map((n) => Number(n.trim()));
     if (numbers.some((n) => n < 1 || n > count)) continue;
     if (match.index > last) nodes.push({ type: "text", value: text.slice(last, match.index) });
     nodes.push(...numbers.map(citeLink));

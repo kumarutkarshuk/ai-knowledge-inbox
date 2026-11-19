@@ -2,6 +2,7 @@ import { NOT_FOUND_ANSWER } from "@/constants";
 import type { Citation, SseEvent } from "@/types/api";
 
 export interface Answer {
+  id: string;
   question: string;
   citations: Citation[] | null;
   text: string;
@@ -10,7 +11,14 @@ export interface Answer {
 }
 
 export function newAnswer(question: string): Answer {
-  return { question, citations: null, text: "", status: "loading", error: null };
+  return {
+    id: crypto.randomUUID(),
+    question,
+    citations: null,
+    text: "",
+    status: "loading",
+    error: null,
+  };
 }
 
 export function applyEvent(answer: Answer, event: SseEvent): Answer {
@@ -24,4 +32,12 @@ export function applyEvent(answer: Answer, event: SseEvent): Answer {
 
 export function isNotFound(answer: Answer): boolean {
   return answer.status === "done" && answer.text.trim() === NOT_FOUND_ANSWER;
+}
+
+export function isPending(answer: Answer): boolean {
+  return answer.status === "loading" || answer.status === "streaming";
+}
+
+export function citationId(turnId: string, n: number): string {
+  return `citation-${turnId}-${n}`;
 }

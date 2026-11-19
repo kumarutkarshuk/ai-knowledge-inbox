@@ -13,12 +13,13 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 - Save a URL (text-based web page only).
 - View saved items with their processing status and error message.
 - Soft delete an item (only when status is READY or FAILED).
-- Ask a single-turn question; get a streamed answer with chunk-level citations.
+- Ask questions in one long chat; each question is answered on its own (single-turn) with a streamed answer and chunk-level citations.
 - Login with a single password.
 
 ## 3. Out of scope
 
-- Chat history (not stored, not sent to LLM). Every question is independent.
+- Chat history on the server or sent to the LLM. The one chat lives only in the browser (localStorage). Every question is independent.
+- More than one chat (no chat list, no new-chat button; only "Clear chat").
 - Multi-user, signup, roles.
 - Following deep links inside a URL page.
 - Non-text URLs (PDF, video, images).
@@ -36,7 +37,7 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 | Scheduler | node-cron inside the backend process |
 | DB | Supabase Postgres + pgvector, reached through the session pooler connection string (DATABASE_URL) with `pg` (node-postgres). No supabase-js, no service role key |
 | RAG lib | Langchain (RecursiveCharacterTextSplitter, Jina embeddings, ChatGroq from `@langchain/groq`) |
-| LLM | Groq `llama-3.3-70b-versatile` |
+| LLM | Groq `openai/gpt-oss-120b` (reasoning effort low) |
 | Embeddings | Jina `jina-embeddings-v3`, 1024 dims (`retrieval.passage` for chunks, `retrieval.query` for queries) |
 | URL extraction | Jina Reader API (`https://r.jina.ai/<url>`, JSON response) |
 | Auth token | JWT HS256 (jsonwebtoken), 7 day expiry |
@@ -72,7 +73,7 @@ A single-user web app where the user saves notes and URLs, then asks questions a
 
 ## 6. Constants
 
-All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` copies only NOTE_MAX_CHARS, QUERY_MAX_CHARS, ITEMS_POLL_MS and NOT_FOUND_ANSWER.
+All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` copies only NOTE_MAX_CHARS, QUERY_MAX_CHARS, ITEMS_POLL_MS and NOT_FOUND_ANSWER, plus the UI-only CHAT_MAX_TURNS (100, the most turns kept in localStorage; older ones are dropped).
 
 | Name | Value |
 |---|---|
@@ -94,7 +95,8 @@ All of these live in `backend/src/constants.ts`. `frontend/src/constants.ts` cop
 | ITEMS_POLL_MS | 5000 (frontend, only while some item is SUBMITTED or PROCESSING) |
 | NOT_FOUND_ANSWER | "Not found in your saved items." |
 | SNIPPET_CHARS | 300 (citation snippet) |
-| GROQ_MODEL | llama-3.3-70b-versatile |
+| GROQ_MODEL | openai/gpt-oss-120b |
+| LLM_REASONING_EFFORT | low (reasoning comes in a separate field, only the answer text is streamed) |
 | LLM_TEMPERATURE | 0.2 |
 | LLM_TIMEOUT_MS | 60_000 (whole LLM stream) |
 | LLM_MAX_RETRIES | 1 (ChatGroq default is 6, which can stall the user for a minute on a 429) |
@@ -235,7 +237,7 @@ Error shape: `{ "error": { "code": string, "message": string } }`
   - Each chunk is its own citation, even if two chunks come from the same item.
 - Client disconnect -> stop the LLM stream (AbortController). Tied to `res.on('close')` (only when the response has not finished), not `req.on('close')`: in Node >= 16 the request emits `close` as soon as its body is read, which would abort every query.
 - Errors after the stream starts -> one `error` event with a generic message ("Could not answer the question. Try again."), then the stream ends. The real error goes to the log.
-- Groq call: ChatGroq, temperature 0.2, maxRetries 1, 60s timeout combined with the abort signal.
+- Groq call: ChatGroq with `openai/gpt-oss-120b`, reasoning effort low, temperature 0.2, maxRetries 1, 60s timeout combined with the abort signal.
 - Log: one JSON line per query (`event: query`, result ANSWERED / NOT_FOUND / ABORTED / ERROR, chunks, llm true/false, error, durationMs). The query text is not logged. `llm: false` proves no Groq call was made.
 - Code: `backend/src/routes/query.ts` (route), `backend/src/rag/answer.ts` (toCitations, prompt, groqAnswer), `backend/src/sse.ts` (openSse, writeSse). `createApp(env, pool, answer?)` takes the answer stream so tests can fake the LLM.
 - Prompt rules for the LLM:
@@ -301,21 +303,31 @@ Pages:
   - [n] markers become clickable chips that scroll to and highlight the citation card.
   - citation cards (shown above the answer, before tokens arrive) show title, URL link (for URL items), snippet and similarity.
   - shows the not-found answer as a muted message.
-  - only one question is in flight; asking again replaces the old answer.
+  - one long chat: each question and its answer is a turn, added below the earlier ones.
+  - auto scroll (`lib/useFollowScroll.ts`): while the answer streams, the page smoothly follows it to the bottom (at most once per animation frame). If the user scrolls up, it stops following; it follows again when the user scrolls back near the bottom (80px) or asks a new question.
+  - only one question is in flight: the Ask button and Enter are disabled until the current answer finishes (done or error). The user can still type the next question.
+  - only the new question is sent (`{ query }`); earlier turns are never sent to the backend or the LLM.
+  - a warning under the question box (always shown): "Each question is answered on its own. Earlier messages are not sent to the AI. The chat is saved only in this browser."
+  - the chat is saved in localStorage key `chat` (last 100 turns). It is not written on every token, only when no turn is streaming. On load, a turn left loading/streaming shows as stopped. Broken data is ignored.
+  - "Clear chat" button (with `window.confirm`) empties the chat and removes the key. Logout does not clear it.
+  - each turn has its own source cards; card ids are `citation-<turnId>-<n>`, so a chip highlights the card of its own turn.
   - shows the stream error message.
   - loading states: "Searching your saved items..." until citations arrive, then "Writing the answer..." until the first token.
   - if the answer is exactly NOT_FOUND_ANSWER, the source cards are hidden.
   - images in the answer are never rendered (blocks data leaks through image URLs).
-  - `[n]` chips come from a remark plugin that only changes text nodes, so `[n]` inside code stays as it is.
+  - `[n]` chips come from a remark plugin that only changes text nodes, so `[n]` inside code stays as it is. It also accepts the full-width `【n】` and `【n†...】` markers that gpt-oss sometimes writes, even though the prompt asks for `[n]`.
   - Enter asks, Shift+Enter adds a new line. The input clears after asking.
-  - Code: `pages/AskPage.tsx`, `components/AnswerView.tsx`, `components/CitationCard.tsx`, `lib/answer.ts` (answer state), `lib/sse.ts` (SSE parser, StreamError), `lib/query.ts` (streamQuery), `lib/citations.ts` (remarkCitations).
+  - Code: `pages/AskPage.tsx`, `components/ChatTurn.tsx`, `components/AnswerView.tsx`, `components/CitationCard.tsx`, `lib/answer.ts` (turn state), `lib/chatStorage.ts` (loadChat, saveChat), `lib/sse.ts` (SSE parser, StreamError), `lib/query.ts` (streamQuery), `lib/citations.ts` (remarkCitations).
 - `/library`:
   - add form with tabs Note / URL. Note has an optional title and content with a live char count (max 50,000). URL has one input.
   - shows 409 "Already saved" and 400 validation messages.
   - items list: type icon, title, URL link or note preview, status badge, error message (FAILED), created time.
   - delete button only for READY and FAILED items, with a confirm dialog (`window.confirm`).
   - polls GET /items every 5s while any item is SUBMITTED or PROCESSING; stops otherwise. Only the latest GET /items response is applied.
-- Nav: top bar with Ask, Library and Logout.
+- Nav: top bar with Ask, Library, a theme toggle and Logout.
+  - sticky at the top (always visible while scrolling).
+  - Library is disabled (`aria-disabled`, no href) while an answer is being generated. AskPage tells Layout through the Outlet context (`setAnswering`).
+- Theme: dark by default, with a Sun/Moon toggle in the nav. The choice is saved in localStorage key `theme`. An inline script in `index.html` sets the `dark` class before React loads (no light flash). Code: `lib/theme.ts`, `components/ThemeToggle.tsx`.
 - Vercel Analytics component added at the root.
 - Env: VITE_API_URL.
 
@@ -340,6 +352,7 @@ Both projects ship their own `.env.example`. The backend validates env vars at s
 - Two overlapping cron runs -> prevented by the in-memory run guard and SKIP LOCKED.
 - Very large page -> cut off at 200k chars, still READY.
 - No chunk >= 0.5 similarity -> NOT_FOUND_ANSWER, no LLM call.
+  - Known gap (2026-11-19, left for later by the user): short entity questions like "who is leo" score only ~0.17 against "My cat Leo sleeps 16 hours a day" with Jina v3, while unrelated questions score 0.11-0.24, so they get NOT_FOUND. A lower threshold alone cannot separate them. Proposed fix: hybrid search (Postgres full-text on chunks + vector, merged by rank fusion).
 - Deleted items never show up in GET /items or in query results.
 - Client closes the tab during streaming -> LLM call aborted.
 - Expired token -> 401 -> frontend goes to /login.

@@ -26,6 +26,18 @@ describe("splitCitations", () => {
     ]);
   });
 
+  it("accepts the full-width 【n】 markers that gpt-oss writes", () => {
+    expect(splitCitations("Leo sleeps【1】 and eats【1, 2】【2†L3-L5】.", 2)).toEqual([
+      { type: "text", value: "Leo sleeps" },
+      { type: "link", url: "#cite-1", children: [{ type: "text", value: "1" }] },
+      { type: "text", value: " and eats" },
+      { type: "link", url: "#cite-1", children: [{ type: "text", value: "1" }] },
+      { type: "link", url: "#cite-2", children: [{ type: "text", value: "2" }] },
+      { type: "link", url: "#cite-2", children: [{ type: "text", value: "2" }] },
+      { type: "text", value: "." },
+    ]);
+  });
+
   it("leaves markers with no matching citation as text", () => {
     expect(splitCitations("See [0], [4] and [1, 9].", 3)).toEqual([
       { type: "text", value: "See [0], [4] and [1, 9]." },

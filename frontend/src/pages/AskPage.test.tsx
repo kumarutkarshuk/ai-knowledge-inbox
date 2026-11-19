@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NOT_FOUND_ANSWER } from "@/constants";
 import { loginRedirect } from "@/lib/apiClient";
+import { STOPPED_MESSAGE } from "@/lib/chatStorage";
 import { getToken, setToken } from "@/lib/auth";
 import { routes } from "@/routes";
 import type { Citation } from "@/types/api";
@@ -125,7 +126,7 @@ describe("AskPage", () => {
     fetchMock.mockResolvedValue(
       streamResponse([
         sse("citations", [citation(1), citation(2)]),
-        sse("token", { text: "Fact [2]." }),
+        sse("token", { text: "Fact【2】." }),
         sse("done", {}),
       ]),
     );
@@ -133,11 +134,12 @@ describe("AskPage", () => {
     await ask("q");
     await userEvent.click(await screen.findByRole("button", { name: "Citation 2" }));
 
-    const card = document.getElementById("citation-2");
-    expect(scrollIntoView).toHaveBeenCalledOnce();
-    expect(scrollIntoView.mock.contexts[0]).toBe(card);
-    expect(card?.querySelector("[data-active]")).not.toBeNull();
-    expect(document.getElementById("citation-1")?.querySelector("[data-active]")).toBeNull();
+    const [card1, card2] = within(screen.getByRole("region", { name: "Sources" })).getAllByRole(
+      "listitem",
+    );
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(card2);
+    expect(card2?.querySelector("[data-active]")).not.toBeNull();
+    expect(card1?.querySelector("[data-active]")).toBeNull();
   });
 
   it("shows the not-found answer as a muted message with no cards", async () => {
@@ -271,30 +273,216 @@ describe("AskPage", () => {
     expect(getToken()).toBeNull();
   });
 
-  it("cancels the old question and replaces its answer when a new one is asked", async () => {
+  it("blocks a new question until the current answer finishes", async () => {
+    let finish: () => void = () => undefined;
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sse("citations", [])));
+        finish = () => {
+          controller.enqueue(encoder.encode(sse("token", { text: "A1" }) + sse("done", {})));
+          controller.close();
+        };
+      },
+    });
+    fetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }));
+    renderAsk();
+    await ask("first");
+    await screen.findByRole("status");
+
+    await ask("second");
+    expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Question" })).toHaveValue("second");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+
+    finish();
+    expect(await screen.findByText("A1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeEnabled();
+  });
+
+  describe("auto scroll", () => {
+    function setScroll(y: number, height: number) {
+      Object.defineProperty(window, "scrollY", { value: y, configurable: true, writable: true });
+      Object.defineProperty(document.documentElement, "scrollHeight", {
+        value: height,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event("scroll"));
+    }
+
+    function controlledStream() {
+      const encoder = new TextEncoder();
+      let push: (text: string) => void = () => undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          push = (text) => controller.enqueue(encoder.encode(text));
+        },
+      });
+      return { response: new Response(body, { status: 200 }), push: (t: string) => push(t) };
+    }
+
+    afterEach(() => {
+      setScroll(0, 0);
+      Reflect.deleteProperty(document.documentElement, "scrollHeight");
+    });
+
+    it("smoothly follows the answer to the bottom while it streams", async () => {
+      const scrollTo = vi.spyOn(window, "scrollTo");
+      const stream = controlledStream();
+      fetchMock.mockResolvedValue(stream.response);
+      renderAsk();
+      await ask("q");
+      stream.push(sse("citations", []));
+      scrollTo.mockClear();
+
+      stream.push(sse("token", { text: "more text" }));
+      await screen.findByText("more text");
+      await waitFor(() =>
+        expect(scrollTo).toHaveBeenCalledWith({ top: expect.any(Number), behavior: "smooth" }),
+      );
+    });
+
+    it("stops following when the user scrolls up, and follows again on the next question", async () => {
+      const scrollTo = vi.spyOn(window, "scrollTo");
+      const first = controlledStream();
+      fetchMock.mockResolvedValueOnce(first.response);
+      renderAsk();
+      await ask("first");
+      first.push(sse("citations", []) + sse("token", { text: "start" }));
+      await screen.findByText("start");
+
+      setScroll(4000, 5000);
+      setScroll(1000, 5000);
+      await new Promise((r) => requestAnimationFrame(r));
+      scrollTo.mockClear();
+
+      first.push(sse("token", { text: " middle" }));
+      await screen.findByText("start middle");
+      await new Promise((r) => requestAnimationFrame(r));
+      expect(scrollTo).not.toHaveBeenCalled();
+
+      first.push(sse("done", {}));
+      await waitFor(() => expect(localStorage.getItem("chat")).toContain('"status":"done"'));
+      const second = controlledStream();
+      fetchMock.mockResolvedValueOnce(second.response);
+      await ask("second");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await waitFor(() => expect(scrollTo).toHaveBeenCalled());
+    });
+  });
+
+  it("disables the Library link while an answer is being generated", async () => {
+    const encoder = new TextEncoder();
+    let finish: () => void = () => undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sse("citations", [])));
+        finish = () => {
+          controller.enqueue(encoder.encode(sse("token", { text: "Done" }) + sse("done", {})));
+          controller.close();
+        };
+      },
+    });
+    fetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }));
+    renderAsk();
+    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
+
+    await ask("q");
+    await screen.findByRole("status");
+    const blocked = screen.getByRole("link", { name: "Library" });
+    expect(blocked).toHaveAttribute("aria-disabled", "true");
+    expect(blocked).not.toHaveAttribute("href");
+    await userEvent.click(blocked);
+    expect(screen.getByRole("textbox", { name: "Question" })).toBeInTheDocument();
+
+    finish();
+    await screen.findByText("Done");
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library"),
+    );
+  });
+
+  it("sends only the new question, never the earlier chat", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        streamResponse([sse("citations", [citation(1, { title: "Old source" })])], {
-          close: false,
-        }),
+        streamResponse([sse("citations", []), sse("token", { text: "A1" }), sse("done", {})]),
       )
       .mockResolvedValueOnce(
-        streamResponse([
-          sse("citations", [citation(1, { title: "New source" })]),
-          sse("token", { text: "New answer" }),
-          sse("done", {}),
-        ]),
+        streamResponse([sse("citations", []), sse("token", { text: "A2" }), sse("done", {})]),
       );
     renderAsk();
     await ask("first");
-    expect(await screen.findByText("Old source")).toBeInTheDocument();
-    const firstSignal = fetchMock.mock.calls[0]?.[1]?.signal;
-
+    await screen.findByText("A1");
     await ask("second");
-    expect(await screen.findByText("New answer")).toBeInTheDocument();
-    expect(firstSignal?.aborted).toBe(true);
-    expect(screen.getByRole("heading", { name: "second" })).toBeInTheDocument();
-    expect(screen.queryByText("Old source")).not.toBeInTheDocument();
+    await screen.findByText("A2");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ query: "second" });
+  });
+
+  it("shows the no-history warning before and after the first question", async () => {
+    fetchMock.mockResolvedValue(
+      streamResponse([sse("citations", []), sse("token", { text: "A" }), sse("done", {})]),
+    );
+    renderAsk();
+    expect(screen.getByRole("note")).toHaveTextContent("Earlier messages are not sent to the AI");
+    await ask("q");
+    await screen.findByText("A");
+    expect(screen.getByRole("note")).toHaveTextContent("Earlier messages are not sent to the AI");
+  });
+
+  it("keeps the chat in local storage across page loads", async () => {
+    fetchMock.mockResolvedValue(
+      streamResponse([
+        sse("citations", [citation(1)]),
+        sse("token", { text: "Saved answer [1]" }),
+        sse("done", {}),
+      ]),
+    );
+    renderAsk();
+    await ask("remember me");
+    await screen.findByRole("button", { name: "Citation 1" });
+    cleanup();
+
+    renderAsk();
+    expect(screen.getByRole("heading", { name: "remember me" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Citation 1" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("shows a question left mid-stream as stopped after a reload", async () => {
+    fetchMock.mockResolvedValue(streamResponse([sse("citations", [])], { close: false }));
+    renderAsk();
+    await ask("half done");
+    await screen.findByRole("status");
+    cleanup();
+
+    renderAsk();
+    expect(screen.getByRole("heading", { name: "half done" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(STOPPED_MESSAGE);
+  });
+
+  it("ignores broken chat data in local storage", () => {
+    localStorage.setItem("chat", "{not json");
+    renderAsk();
+    expect(screen.getByRole("heading", { name: "What do you want to know?" })).toBeInTheDocument();
+  });
+
+  it("clears the chat after a confirm", async () => {
+    fetchMock.mockResolvedValue(
+      streamResponse([sse("citations", []), sse("token", { text: "A" }), sse("done", {})]),
+    );
+    renderAsk();
+    await ask("q");
+    await screen.findByText("A");
+
+    vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+    await userEvent.click(screen.getByRole("button", { name: "Clear chat" }));
+    expect(screen.getByText("A")).toBeInTheDocument();
+
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    await userEvent.click(screen.getByRole("button", { name: "Clear chat" }));
+    expect(screen.getByRole("heading", { name: "What do you want to know?" })).toBeInTheDocument();
+    expect(localStorage.getItem("chat")).toBeNull();
   });
 
   it("does not send a question longer than 1000 chars", async () => {

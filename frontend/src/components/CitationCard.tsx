@@ -2,10 +2,16 @@ import { FileText, Link as LinkIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Citation } from "@/types/api";
 
-export function CitationCard({ citation, active }: { citation: Citation; active: boolean }) {
+interface Props {
+  id: string;
+  citation: Citation;
+  active: boolean;
+}
+
+export function CitationCard({ id, citation, active }: Props) {
   const Icon = citation.type === "URL" ? LinkIcon : FileText;
   return (
-    <li id={`citation-${citation.n}`} className="scroll-mt-4">
+    <li id={id} className="scroll-mt-20">
       <Card
         size="sm"
         data-active={active || undefined}

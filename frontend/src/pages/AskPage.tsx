@@ -1,16 +1,27 @@
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Info, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { AnswerView } from "@/components/AnswerView";
-import { CitationCard } from "@/components/CitationCard";
+import { useOutletContext } from "react-router";
+import { ChatTurn } from "@/components/ChatTurn";
+import type { LayoutContext } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QUERY_MAX_CHARS } from "@/constants";
-import { applyEvent, isNotFound, newAnswer, type Answer } from "@/lib/answer";
+import { applyEvent, citationId, isPending, newAnswer, type Answer } from "@/lib/answer";
 import { ApiError } from "@/lib/apiClient";
+import { loadChat, saveChat } from "@/lib/chatStorage";
 import { streamQuery } from "@/lib/query";
 import { StreamError } from "@/lib/sse";
+import { useFollowScroll } from "@/lib/useFollowScroll";
 
 const HIGHLIGHT_MS = 2000;
+
+export const NO_HISTORY_WARNING =
+  "Each question is answered on its own. Earlier messages are not sent to the AI. The chat is saved only in this browser.";
+
+interface Highlight {
+  turnId: string;
+  n: number;
+}
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError || err instanceof StreamError) return err.message;
@@ -19,8 +30,8 @@ function errorMessage(err: unknown): string {
 
 export function AskPage() {
   const [input, setInput] = useState("");
-  const [answer, setAnswer] = useState<Answer | null>(null);
-  const [active, setActive] = useState<number | null>(null);
+  const [turns, setTurns] = useState<Answer[]>(loadChat);
+  const [active, setActive] = useState<Highlight | null>(null);
   const controller = useRef<AbortController | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -32,25 +43,49 @@ export function AskPage() {
     [],
   );
 
+  useEffect(() => {
+    if (!turns.some((turn) => turn.status === "streaming")) saveChat(turns);
+  }, [turns]);
+
+  const followScroll = useFollowScroll(turns);
+
   const query = input.trim();
-  const canAsk = query.length > 0 && query.length <= QUERY_MAX_CHARS;
+  const busy = turns.some(isPending);
+  const setAnswering = useOutletContext<LayoutContext | undefined>()?.setAnswering;
+  useEffect(() => {
+    setAnswering?.(busy);
+    return () => setAnswering?.(false);
+  }, [busy, setAnswering]);
+  const canAsk = !busy && query.length > 0 && query.length <= QUERY_MAX_CHARS;
+
+  function updateTurn(id: string, change: (turn: Answer) => Answer) {
+    setTurns((prev) => prev.map((turn) => (turn.id === id ? change(turn) : turn)));
+  }
 
   async function ask() {
     if (!canAsk) return;
-    controller.current?.abort();
     const current = new AbortController();
     controller.current = current;
+    const turn = newAnswer(query);
     setActive(null);
     setInput("");
-    setAnswer(newAnswer(query));
+    followScroll.resume();
+    setTurns((prev) => [...prev, turn]);
     try {
       await streamQuery(query, current.signal, (event) => {
-        if (!current.signal.aborted) setAnswer((prev) => prev && applyEvent(prev, event));
+        if (!current.signal.aborted) updateTurn(turn.id, (t) => applyEvent(t, event));
       });
     } catch (err) {
       if (current.signal.aborted) return;
-      setAnswer((prev) => prev && { ...prev, status: "error", error: errorMessage(err) });
+      updateTurn(turn.id, (t) => ({ ...t, status: "error", error: errorMessage(err) }));
     }
+  }
+
+  function clearChat() {
+    if (!window.confirm("Clear the whole chat?")) return;
+    controller.current?.abort();
+    setActive(null);
+    setTurns([]);
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -65,46 +100,54 @@ export function AskPage() {
     }
   }
 
-  function onCite(n: number) {
-    document.getElementById(`citation-${n}`)?.scrollIntoView?.({
+  function onCite(turnId: string, n: number) {
+    document.getElementById(citationId(turnId, n))?.scrollIntoView?.({
       behavior: "smooth",
       block: "nearest",
     });
-    setActive(n);
+    setActive({ turnId, n });
     clearTimeout(highlightTimer.current);
     highlightTimer.current = setTimeout(() => setActive(null), HIGHLIGHT_MS);
   }
 
   const form = (
-    <form onSubmit={onSubmit} className="relative w-full">
-      <Textarea
-        aria-label="Question"
-        placeholder="Ask anything about your saved notes and links..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={onKeyDown}
-        maxLength={QUERY_MAX_CHARS}
-        rows={answer ? 1 : 3}
-        className="max-h-48 resize-none bg-background pr-12 shadow-sm"
-      />
-      <Button
-        type="submit"
-        size="icon-sm"
-        aria-label="Ask"
-        disabled={!canAsk}
-        className="absolute right-2 bottom-2 rounded-full"
-      >
-        <ArrowUp />
-      </Button>
-      {input.length > QUERY_MAX_CHARS * 0.9 && (
-        <p className="mt-1 text-right text-xs text-muted-foreground">
-          {input.length} / {QUERY_MAX_CHARS}
+    <form onSubmit={onSubmit} className="flex w-full flex-col gap-1">
+      <div className="relative">
+        <Textarea
+          aria-label="Question"
+          placeholder="Ask anything about your saved notes and links..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+          maxLength={QUERY_MAX_CHARS}
+          rows={turns.length ? 1 : 3}
+          className="max-h-48 resize-none bg-background pr-12 shadow-sm"
+        />
+        <Button
+          type="submit"
+          size="icon-sm"
+          aria-label="Ask"
+          disabled={!canAsk}
+          className="absolute right-2 bottom-2 rounded-full"
+        >
+          <ArrowUp />
+        </Button>
+      </div>
+      <div className="flex items-start gap-2 text-xs text-muted-foreground">
+        <p role="note" className="flex flex-1 items-start gap-1">
+          <Info aria-hidden className="mt-px size-3.5 shrink-0" />
+          {NO_HISTORY_WARNING}
         </p>
-      )}
+        {input.length > QUERY_MAX_CHARS * 0.9 && (
+          <span>
+            {input.length} / {QUERY_MAX_CHARS}
+          </span>
+        )}
+      </div>
     </form>
   );
 
-  if (!answer) {
+  if (turns.length === 0) {
     return (
       <div className="flex min-h-[60svh] flex-col items-center justify-center gap-6">
         <h1 className="text-3xl font-semibold">What do you want to know?</h1>
@@ -115,21 +158,24 @@ export function AskPage() {
 
   return (
     <div className="flex min-h-[calc(100svh-6rem)] flex-col gap-6">
-      <div className="flex flex-1 flex-col gap-6">
-        <h1 className="text-2xl font-semibold break-words">{answer.question}</h1>
-        {answer.citations && answer.citations.length > 0 && !isNotFound(answer) && (
-          <section aria-label="Sources" className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-muted-foreground">Sources</h2>
-            <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {answer.citations.map((citation) => (
-                <CitationCard key={citation.n} citation={citation} active={active === citation.n} />
-              ))}
-            </ol>
-          </section>
-        )}
-        <AnswerView answer={answer} onCite={onCite} />
+      <div className="flex items-center justify-between">
+        <h1 className="text-sm font-medium text-muted-foreground">Chat</h1>
+        <Button variant="ghost" size="sm" onClick={clearChat}>
+          <Trash2 />
+          Clear chat
+        </Button>
       </div>
-      <div className="sticky bottom-0 bg-background pt-2 pb-4">{form}</div>
+      <div className="flex flex-1 flex-col gap-10">
+        {turns.map((turn) => (
+          <ChatTurn
+            key={turn.id}
+            turn={turn}
+            activeN={active?.turnId === turn.id ? active.n : null}
+            onCite={(n) => onCite(turn.id, n)}
+          />
+        ))}
+      </div>
+      <div className="sticky bottom-0 z-10 bg-background pt-2 pb-4">{form}</div>
     </div>
   );
 }

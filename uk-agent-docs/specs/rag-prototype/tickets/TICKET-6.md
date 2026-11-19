@@ -15,7 +15,7 @@ Backend:
   - set SSE headers (`text/event-stream`, `no-cache`, `X-Accel-Buffering: no`) and flush them.
   - `embedQuery(query, JINA_API_KEY)` (from `src/rag/embeddings.ts`) -> `matchChunks(pool, emb, 5, 0.5)` (from `src/queries.ts`).
   - no rows: `citations []` -> `token` NOT_FOUND_ANSWER -> `done`, with no LLM call.
-  - else: `citations` (n, itemId, type, title, sourceUrl, 300-char snippet, similarity) -> stream ChatGroq (`llama-3.3-70b-versatile`, temperature 0.2) tokens as `token` events -> `done`.
+  - else: `citations` (n, itemId, type, title, sourceUrl, 300-char snippet, similarity) -> stream ChatGroq (`openai/gpt-oss-120b`, reasoning effort low, temperature 0.2) tokens as `token` events -> `done`.
   - prompt template with numbered context chunks and the SPEC 8 rules.
   - AbortController tied to `res.on('close')` (not `req.on('close')`, which fires once the body is read in Node >= 16).
   - errors after the stream starts -> `error` event, then end.
@@ -26,7 +26,8 @@ Frontend (`/`):
 - fetch + ReadableStream SSE parser (POST), using the apiClient auth header and the 401 handling.
 - Citation cards render as soon as the `citations` event arrives.
 - The answer streams in as markdown (react-markdown); `[n]` becomes a clickable chip that scrolls to and highlights card n.
-- The not-found answer is shown muted. Show a loading state, the error state, and a cancel when a new question is asked.
+- The not-found answer is shown muted. Show a loading state and the error state. (changed 2026-11-19) Asking is disabled until the current answer finishes, instead of cancelling it.
+- (added 2026-11-19) One long chat kept in localStorage, with "Clear chat". Only the new question is sent, never the history; a warning under the question box says so.
 
 Tests: SSE parser (split chunks, multiple events in one chunk), citation mapping.
 
