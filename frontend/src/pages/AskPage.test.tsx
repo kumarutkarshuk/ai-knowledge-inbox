@@ -132,7 +132,10 @@ describe("AskPage", () => {
     );
     renderAsk();
     await ask("q");
-    await userEvent.click(await screen.findByRole("button", { name: "Citation 2" }));
+    const chip = await screen.findByRole("button", { name: "Citation 2" });
+    await waitFor(() => expect(localStorage.getItem("chat")).toContain('"status":"done"'));
+    expect(chip).toBeInTheDocument();
+    await userEvent.click(chip);
 
     const [card1, card2] = within(screen.getByRole("region", { name: "Sources" })).getAllByRole(
       "listitem",
