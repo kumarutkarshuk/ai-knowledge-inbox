@@ -146,7 +146,8 @@ Plain SQL sent with `pg`. No job or search functions live in the database (see D
   - `saveUrlContent(db, id, { title, content })`: sets raw_content, and title when Jina gives one.
   - `saveChunksAndMarkReady(client, id, chunks)`: run inside a transaction; sets READY + error_message null, deletes old chunks, inserts the new ones (one `unnest` insert). Returns false and writes nothing if the row is no longer PROCESSING.
   - `recordJobFailure(db, id, { retryCount, status, errorMessage })`.
-  - all three only touch rows with status 'PROCESSING', so a run never overwrites a job that a stuck reset already took back.
+  - `releaseJob(db, id)`: back to SUBMITTED, retry_count and error_message unchanged (used on shutdown).
+  - all four only touch rows with status 'PROCESSING', so a run never overwrites a job that a stuck reset already took back.
 - Counts (`batch`, `matchCount`, `stuckMinutes`, `maxRetries`) must be non-negative integers, else the function throws before querying.
 - `db` is a pool or a checked-out client, so callers can run claimJobs inside their own transaction.
 
@@ -240,7 +241,7 @@ Runs inside the backend process with node-cron, every 1 minute, started after th
 
 Code: `backend/src/worker/` (`jobs.ts`: createWorker, decideFailure; `extract.ts`: extractUrl; `chunk.ts`: chunkText; `index.ts`: startWorker) and `backend/src/rag/embeddings.ts` (embedPassages, embedQuery; reused by POST /query).
 
-Every worker DB call runs in a short transaction (`withTimedTransaction` in `db.ts`) with `set local statement_timeout` = DB_QUERY_TIMEOUT_MS, so a hung query cannot block the worker for ever. Jina calls (Reader and embeddings) time out after 30s.
+Every worker DB call runs in a short transaction (`withTimedTransaction` in `db.ts`) with `set local statement_timeout` = DB_QUERY_TIMEOUT_MS, so a hung query cannot block the worker for ever. Jina calls (Reader and embeddings) time out after 30s and also take an optional AbortSignal (`withTimeout` in `rag/timeout.ts`).
 
 Each run:
 1. `resetStuckJobs(pool, 10, 3)`.
@@ -261,7 +262,7 @@ Each run:
 4. On error for a job: retry_count + 1; error_message = error text plus its cause (e.g. `fetch failed: getaddrinfo ENOTFOUND x`), max 200 chars; status SUBMITTED if retry_count <= 3, else FAILED.
 5. One failing job must not stop the other jobs in the same run.
 6. Logs: one JSON line per job (`event: worker.job`, id, type, result READY / RETRY / FAILED / SKIPPED, chunks or error, durationMs), one per stuck reset (`worker.stuck`), and `worker.run` with ERROR if the run itself fails.
-7. On SIGTERM/SIGINT the cron stops and shutdown waits for the current run before closing the pool. If the process is killed anyway, the stuck reset brings the job back after 10 min.
+7. On SIGTERM/SIGINT (handled once; repeated signals are ignored) the cron stops and the worker aborts its Jina calls. The running job and any other claimed jobs go back to SUBMITTED with no retry counted (`releaseJob`, log result RELEASED), then the pool closes. This takes milliseconds, so it finishes before a watcher's force kill (`tsx watch` SIGKILLs on the second SIGINT, and `bun run dev` relays Ctrl+C as a second one). If the process is killed anyway, the stuck reset brings the job back after 10 min.
 
 ## 10. Auth
 

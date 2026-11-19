@@ -39,8 +39,12 @@ server.on("error", (err) => {
   process.exit(1);
 });
 
+let shuttingDown = false;
+
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
-  process.once(signal, () => {
+  process.on(signal, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log(`${signal} received, shutting down`);
     const workerStopped = Promise.resolve(worker?.stop()).catch((err) =>
       console.error("Worker stop failed:", err),

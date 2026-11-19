@@ -1,4 +1,5 @@
-import { JINA_READER_URL, JINA_TIMEOUT_MS, URL_CONTENT_MAX_CHARS } from "../constants.js";
+import { JINA_READER_URL, URL_CONTENT_MAX_CHARS } from "../constants.js";
+import { withTimeout } from "../rag/timeout.js";
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.replaceAll("\u0000", "") : "";
@@ -11,10 +12,11 @@ interface JinaReaderResponse {
 export async function extractUrl(
   url: string,
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<{ title: string | null; content: string }> {
   const res = await fetch(`${JINA_READER_URL}${url}`, {
     headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(JINA_TIMEOUT_MS),
+    signal: withTimeout(signal),
   });
   if (!res.ok) throw new Error(`Jina Reader failed with HTTP ${res.status}`);
   const { data } = (await res.json()) as JinaReaderResponse;

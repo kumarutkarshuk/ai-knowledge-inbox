@@ -167,14 +167,32 @@ describe.skipIf(!adminUrl)("ingestion worker", () => {
     expect(await worker.run()).toBe(true);
   });
 
-  it("waits for the current run in idle()", async () => {
-    const note = await insertNote(pool, "note");
-    stubJina();
+  it("on stop, aborts the running job and puts every claimed job back to SUBMITTED", async () => {
+    const slow = await insertUrlItem(pool, "https://slow.example.com");
+    const waiting = await insertNote(pool, "waiting note");
+    const fetchMock = stubJina();
+    let started!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => (started = resolve));
+    fetchMock.mockImplementationOnce(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          started();
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+    );
     const worker = createWorker(pool, "key");
     const running = worker.run();
-    await worker.idle();
-    expect((await item(note.id)).status).toBe("READY");
+    await fetchStarted;
+    await worker.stop();
     expect(await running).toBe(true);
+    for (const id of [slow.id, waiting.id]) {
+      expect(await item(id)).toMatchObject({
+        status: "SUBMITTED",
+        retry_count: 0,
+        error_message: null,
+      });
+    }
+    expect(await worker.run()).toBe(false);
   });
 
   it("does not overwrite a job that is no longer PROCESSING", async () => {

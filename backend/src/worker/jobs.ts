@@ -9,6 +9,7 @@ import { withTimedTransaction, type KnowledgeBaseRow } from "../db.js";
 import {
   claimJobs,
   recordJobFailure,
+  releaseJob,
   resetStuckJobs,
   saveChunksAndMarkReady,
   saveUrlContent,
@@ -36,16 +37,22 @@ export function decideFailure(
   };
 }
 
-async function processJob(pool: pg.Pool, job: KnowledgeBaseRow, apiKey: string) {
+interface JobContext {
+  pool: pg.Pool;
+  apiKey: string;
+  signal: AbortSignal;
+}
+
+async function processJob({ pool, apiKey, signal }: JobContext, job: KnowledgeBaseRow) {
   let text = job.raw_content ?? "";
   if (job.type === "URL") {
-    const page = await extractUrl(job.source_url as string, apiKey);
+    const page = await extractUrl(job.source_url as string, apiKey, signal);
     await withTimedTransaction(pool, (client) => saveUrlContent(client, job.id, page));
     text = page.content;
   }
   const pieces = await chunkText(text);
   if (pieces.length === 0) throw new Error("No text content found");
-  const vectors = await embedPassages(pieces, apiKey);
+  const vectors = await embedPassages(pieces, apiKey, signal);
   const chunks = pieces.map((content, i) => ({ content, embedding: vectors[i] as number[] }));
   const saved = await withTimedTransaction(pool, (client) =>
     saveChunksAndMarkReady(client, job.id, chunks),
@@ -53,17 +60,28 @@ async function processJob(pool: pg.Pool, job: KnowledgeBaseRow, apiKey: string) 
   return { result: saved ? "READY" : "SKIPPED", chunks: chunks.length };
 }
 
-async function runJob(pool: pg.Pool, job: KnowledgeBaseRow, apiKey: string): Promise<void> {
+async function release(ctx: JobContext, job: KnowledgeBaseRow, log: object, started: number) {
+  try {
+    await withTimedTransaction(ctx.pool, (client) => releaseJob(client, job.id));
+    console.log(JSON.stringify({ ...log, result: "RELEASED", durationMs: Date.now() - started }));
+  } catch (err) {
+    console.error(`Worker could not release ${job.id}:`, err);
+  }
+}
+
+async function runJob(ctx: JobContext, job: KnowledgeBaseRow): Promise<void> {
   const started = Date.now();
   const log = { event: "worker.job", id: job.id, type: job.type };
+  if (ctx.signal.aborted) return release(ctx, job, log, started);
   try {
-    const outcome = await processJob(pool, job, apiKey);
+    const outcome = await processJob(ctx, job);
     console.log(JSON.stringify({ ...log, ...outcome, durationMs: Date.now() - started }));
   } catch (err) {
+    if (ctx.signal.aborted) return release(ctx, job, log, started);
     const failure = decideFailure(job.retry_count, err);
     let recorded = true;
     try {
-      await withTimedTransaction(pool, (client) => recordJobFailure(client, job.id, failure));
+      await withTimedTransaction(ctx.pool, (client) => recordJobFailure(client, job.id, failure));
     } catch (dbErr) {
       recorded = false;
       console.error(`Worker could not record failure for ${job.id}:`, dbErr);
@@ -81,9 +99,9 @@ async function runJob(pool: pg.Pool, job: KnowledgeBaseRow, apiKey: string): Pro
   }
 }
 
-async function runOnce(pool: pg.Pool, apiKey: string): Promise<void> {
+async function runOnce(ctx: JobContext): Promise<void> {
   try {
-    const reset = await withTimedTransaction(pool, (client) =>
+    const reset = await withTimedTransaction(ctx.pool, (client) =>
       resetStuckJobs(client, STUCK_AFTER_MINUTES, MAX_RETRIES),
     );
     for (const row of reset) {
@@ -96,19 +114,21 @@ async function runOnce(pool: pg.Pool, apiKey: string): Promise<void> {
         }),
       );
     }
-    const jobs = await withTimedTransaction(pool, (client) => claimJobs(client, JOBS_PER_RUN));
-    for (const job of jobs) await runJob(pool, job, apiKey);
+    const jobs = await withTimedTransaction(ctx.pool, (client) => claimJobs(client, JOBS_PER_RUN));
+    for (const job of jobs) await runJob(ctx, job);
   } catch (err) {
     console.error(JSON.stringify({ event: "worker.run", result: "ERROR", error: errorText(err) }));
   }
 }
 
 export function createWorker(pool: pg.Pool, apiKey: string) {
+  const controller = new AbortController();
+  const ctx: JobContext = { pool, apiKey, signal: controller.signal };
   let current: Promise<void> | undefined;
 
   async function run(): Promise<boolean> {
-    if (current) return false;
-    current = runOnce(pool, apiKey);
+    if (current || controller.signal.aborted) return false;
+    current = runOnce(ctx);
     try {
       await current;
     } finally {
@@ -117,9 +137,10 @@ export function createWorker(pool: pg.Pool, apiKey: string) {
     return true;
   }
 
-  async function idle(): Promise<void> {
+  async function stop(): Promise<void> {
+    controller.abort();
     await current;
   }
 
-  return { run, idle };
+  return { run, stop };
 }

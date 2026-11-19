@@ -9,7 +9,7 @@ export function startWorker(pool: pg.Pool, apiKey: string) {
   return {
     async stop(): Promise<void> {
       await task.stop();
-      await worker.idle();
+      await worker.stop();
     },
   };
 }

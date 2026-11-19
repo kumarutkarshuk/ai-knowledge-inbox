@@ -138,3 +138,10 @@ export async function recordJobFailure(
     [id, failure.retryCount, failure.status, failure.errorMessage],
   );
 }
+
+export async function releaseJob(db: Queryable, id: string): Promise<void> {
+  await db.query(
+    "update knowledge_base set status = 'SUBMITTED' where id = $1 and status = 'PROCESSING'",
+    [id],
+  );
+}
