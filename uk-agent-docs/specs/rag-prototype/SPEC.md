@@ -301,7 +301,7 @@ Pages:
   - a big centered question box; it moves to the bottom after the first question.
   - the answer streams in, rendered as markdown.
   - [n] markers become clickable chips that scroll to and highlight the citation card.
-  - citation cards (shown before tokens arrive) show title, URL link (for URL items), snippet and similarity. At 1024px and wider they sit in a sticky ruled column right of the answer; below that they stack above it. The DOM order stays sources, then answer.
+  - citation cards (shown above the answer, before tokens arrive) show title, URL link (for URL items), snippet and similarity. They are ruled rows in a grid (1 column on phone, 2 from 640px, 3 from 1024px). The highlighted card gets a brick tint and a 1px brick outline (visible in both modes).
   - shows the not-found answer as a muted message.
   - one long chat: each question and its answer is a turn, added below the earlier ones.
   - auto scroll (`lib/useFollowScroll.ts`): while the answer streams, the page smoothly follows it to the bottom (at most once per animation frame). If the user scrolls up, it stops following; it follows again when the user scrolls back near the bottom (80px) or asks a new question.

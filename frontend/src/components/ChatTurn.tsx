@@ -14,18 +14,15 @@ export function ChatTurn({ turn, activeN, onCite }: Props) {
     <article
       id={`turn-${turn.id}`}
       aria-label={turn.question}
-      className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 py-8 first:pt-2 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-x-10"
+      className="flex scroll-mt-28 flex-col gap-6 py-8 first:pt-2"
     >
-      <h2 className="text-2xl break-words lg:col-span-2">{turn.question}</h2>
+      <h2 className="text-2xl break-words">{turn.question}</h2>
       {citations.length > 0 && !isNotFound(turn) && (
-        <section
-          aria-label="Sources"
-          className="flex flex-col gap-2 lg:sticky lg:top-24 lg:col-start-2 lg:row-start-2 lg:self-start lg:border-l lg:border-hairline lg:pl-6"
-        >
+        <section aria-label="Sources" className="flex flex-col gap-2">
           <h3 className="font-sans text-sm font-medium tracking-normal text-muted-foreground">
             Sources
           </h3>
-          <ol className="-mx-3 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-1">
+          <ol className="-mx-3 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
             {citations.map((citation) => (
               <CitationCard
                 key={citation.n}
@@ -37,7 +34,7 @@ export function ChatTurn({ turn, activeN, onCite }: Props) {
           </ol>
         </section>
       )}
-      <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+      <div className="min-w-0">
         <AnswerView answer={turn} onCite={onCite} />
       </div>
     </article>

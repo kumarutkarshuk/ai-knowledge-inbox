@@ -13,7 +13,7 @@ export function CitationCard({ id, citation, active }: Props) {
     <li id={id} className="min-w-0 scroll-mt-28 border-t border-hairline">
       <div
         data-active={active || undefined}
-        className="flex h-full flex-col gap-1 px-3 py-3 text-sm transition-[background-color] duration-(--dur-short) data-active:bg-well"
+        className="flex h-full flex-col gap-1 px-3 py-3 text-sm transition-[background-color] duration-(--dur-short) data-active:bg-brick/15 data-active:outline data-active:-outline-offset-1 data-active:outline-brick"
       >
         <div className="flex items-baseline gap-2">
           <span className="font-figure text-sm text-brick tabular-nums">{citation.n}</span>
